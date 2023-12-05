@@ -1,20 +1,60 @@
 import json
+import re
 from datetime import datetime
 from fuzzywuzzy import fuzz
 
-regions = ["Бадайбо", "Бодайбинское", "Иркут", "Тайшет", "Усолье"]
-
+regions = [
+    { 'match': [ 'Иркутск' ] },
+    { 'match': [ 'Ангарск' ] },
+    { 'match': [ 'Братск' ] },
+    { 'match': [ 'Усть-Илимск' ] },
+    { 'match': [ 'Усоль' ] },
+    { 'match': [ 'Тайшет' ] },
+    { 'match': [ 'Шелехов' ] },
+    { 'match': [ 'г. Черемхово' ] },
+    { 'match': [ 'Нижнеудинск' ] },
+    { 'match': [ 'Усть-Кут' ] },
+    { 'match': [ 'Нижнеилимск' ] },
+    { 'match': [ 'Зим' ] },
+    { 'match': [ 'Слюдян' ] },
+    { 'match': [ 'Тулун' ] },
+    { 'match': [ 'Саянск', ] },
+    { 'match': [ 'Эхирит-Булагатский' ] },
+    { 'match': [ 'Черемхов' ] },
+    { 'match': [ 'Куйтун' ] },
+    { 'match': [ 'Чунск' ] },
+    { 'match': [ 'Залари' ] },
+    { 'match': [ 'Бохан' ] },
+    { 'match': [ 'Аларск', 'Кутулик' ] },
+    { 'match': [ 'Осинск' ] },
+    { 'match': [ 'Киренск' ] },
+    { 'match': [ 'Свирск' ] },
+    { 'match': [ 'Качуг' ] },
+    { 'match': [ 'Казачинско-Ленск' ] },
+    { 'match': [ 'Нукутск' ] },
+    { 'match': [ 'Усть-Уд' ] },
+    { 'match': [ 'Бодайб' ] },
+    { 'match': [ 'Усть-Илимск' ] },
+    { 'match': [ 'Баяндаевск', 'Баяндай' ] },
+    { 'match': [ 'Ольхон' ] },
+    { 'match': [ 'Жигалов' ] },
+    { 'match': [ 'Балаганск' ] },
+    { 'match': [ 'Мамско-Чуйск', 'Мама' ] },
+    { 'match': [ 'Катангск' ] }
+]
+# Кутулик
+# Мама
 def normalize_word(word):
     return word.lower()
 
 # Check if normalized word are similar to base word using the Levenshtein distance.
-def is_similar_word(word1, word2, threshold=20):
+def is_similar_word(word1, word2, threshold=30):
     return fuzz.ratio(normalize_word(word1), normalize_word(word2)) >= threshold
 
 def find_region_mention(text, regions):
 
     # Split the message into words.
-    words = text.split()
+    words = re.split('\\. |\\, |\\.|-| ', text)
 
     # Check each word for similarity to region names.
     for region in regions:
