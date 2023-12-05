@@ -16,6 +16,9 @@ class User:
         # Add or update the count for the specified region
         self.regions_count[region_id] = self.regions_count.get(region_id, 0) + 1
 
+    def add_message_count(self):
+        self.message_count += 1
+
     def display_user_info(self):
         print(f"Name: {self.name}")
         print(f"ID: {self.user_id}")
@@ -44,6 +47,25 @@ def get_first_dict(dictionary):
         return -1, None
 
 
+def add_user(users_list, name, user_id, message, region_id=None):
+    # Check if the user with the given user_id already exists.
+    existing_user = next((user for user in users_list if user.user_id == user_id), None)
+
+    if existing_user:
+        # User already exists, update the existing user.
+        existing_user.add_region(region_id)  # You can add a check for None if needed.
+        existing_user.add_message_count()
+    else:
+        # User does not exist, create a new user and add to the list.
+        new_user = User(name, user_id, message)
+        if region_id is not None:
+            new_user.add_region(region_id)
+        users_list.append(new_user)
+
+
+users_list = []
+
+# TODO: add display name for city and for district.
 regions = [
     { 'match': [ 'Иркутск' ] },
     { 'match': [ 'Ангарск' ] },
@@ -133,11 +155,12 @@ def parse_telegram_to_excel():
             text = txt_content
 
         text = text.replace("\n", " ")
-        # Create user.
-        user = User(name=user_name, user_id=user_id, message=text)
-        index = find_region_mention(text)
-        user.add_region(index)
-        user.display_user_info()
+        # Create user or get already existed.
+        region_id = find_region_mention(text)
+        add_user(users_list, user_name, user_id, text, region_id)
+        
+        for user in users_list:
+            user.display_user_info()
 
 # Call the function to execute the code.
 parse_telegram_to_excel()
