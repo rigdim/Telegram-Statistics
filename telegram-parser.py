@@ -25,8 +25,11 @@ class User:
         # Sort dictionary descending.
         sorted_regions=sort_dict(self.regions_count)
         # Display the first (max) element from the sorted dictionary.
-        first_region=get_first_dict(sorted_regions)
-        print(f"Region: {first_region} {self.region_type}")
+        (first_region, count) = get_first_dict(sorted_regions)
+        if first_region:
+            print(f"Region: {regions[first_region]['match'][0]} {count}")
+        else:
+            print("Регион не найден")
         print("---")
 
 def sort_dict(dictionary, reverse=False):
