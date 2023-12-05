@@ -3,6 +3,44 @@ import re
 from datetime import datetime
 from fuzzywuzzy import fuzz
 
+class User:
+    def __init__(self, name, user_id, message):
+        self.name = name
+        self.user_id = user_id
+        self.message = message
+        self.message_count = 1  # Initialize message count to 1
+        self.regions_count = {}  # Dictionary to store region counts
+        self.region_type = ''
+
+    def add_region(self, region_id):
+        # Add or update the count for the specified region
+        self.regions_count[region_id] = self.regions_count.get(region_id, 0) + 1
+
+    def display_user_info(self):
+        print(f"Name: {self.name}")
+        print(f"ID: {self.user_id}")
+        print(f"Message: {self.message}")
+        print(f"Message Count: {self.message_count}")
+
+        # Sort dictionary descending.
+        sorted_regions=sort_dict(self.regions_count)
+        # Display the first (max) element from the sorted dictionary.
+        first_region=get_first_dict(sorted_regions)
+        print(f"Region: {first_region} {self.region_type}")
+        print("---")
+
+def sort_dict(dictionary, reverse=False):
+     return dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=reverse))
+
+
+def get_first_dict(dictionary):
+    if dictionary:
+        first, value = next(iter(dictionary.items()))
+        return first, value
+    else:
+        return -1, None
+
+
 regions = [
     { 'match': [ 'Иркутск' ] },
     { 'match': [ 'Ангарск' ] },
@@ -19,7 +57,7 @@ regions = [
     { 'match': [ 'Слюдян' ] },
     { 'match': [ 'Тулун' ] },
     { 'match': [ 'Саянск', ] },
-    { 'match': [ 'Эхирит-Булагатский' ] },
+    { 'match': [ 'Эхирит-Булагатск' ] },
     { 'match': [ 'Черемхов' ] },
     { 'match': [ 'Куйтун' ] },
     { 'match': [ 'Чунск' ] },
@@ -42,25 +80,31 @@ regions = [
     { 'match': [ 'Мамско-Чуйск', 'Мама' ] },
     { 'match': [ 'Катангск' ] }
 ]
-# Кутулик
-# Мама
-def normalize_word(word):
-    return word.lower()
 
-# Check if normalized word are similar to base word using the Levenshtein distance.
-def is_similar_word(word1, word2, threshold=30):
-    return fuzz.ratio(normalize_word(word1), normalize_word(word2)) >= threshold
+# Word endings for region comparemet.
+region_endings = [ 'ий', 'ого', 'ому', 'им', 'ом' ] 
 
-def find_region_mention(text, regions):
+# Check if the last letters are equal to the provided ending.
+def check_ending(str, ending):
 
-    # Split the message into words.
-    words = re.split('\\. |\\, |\\.|-| ', text)
+    last_letters = str[-len(ending):]
+
+    return last_letters == ending
+
+
+def find_region_mention(text):
+
+    words = re.split('\\. |\\, |\\.| ', text)
 
     # Check each word for similarity to region names.
-    for region in regions:
-        for word in words:
-            if is_similar_word(word, region):
-                return region
+    for word in words:
+        for index, region in enumerate(regions):
+            for region_match in region['match']:
+                if region_match in word:
+                    for ending in region_endings:
+                        if check_ending(word, ending):
+                            return index
+                        return index
     
 
 def parse_telegram_to_excel():
@@ -86,11 +130,11 @@ def parse_telegram_to_excel():
             text = txt_content
 
         text = text.replace("\n", " ")
-
-        region = find_region_mention(text, regions)
-
-        print(f"User: {user_name}\n\tMessage: {text}\n\tRegion: {region}\n")
-
+        # Create user.
+        user = User(name=user_name, user_id=user_id, message=text)
+        index = find_region_mention(text)
+        user.add_region(index)
+        user.display_user_info()
 
 # Call the function to execute the code.
 parse_telegram_to_excel()
