@@ -19,6 +19,7 @@ class User:
     def add_message_count(self):
         self.message_count += 1
 
+    # TODO: If first_region is None then get second element.
     def display_user_info(self):
         print(f"Name: {self.name}")
         print(f"ID: {self.user_id}")
@@ -29,14 +30,18 @@ class User:
         sorted_regions=sort_dict(self.regions_count)
         # Display the first (max) element from the sorted dictionary.
         (first_region, count) = get_first_dict(sorted_regions)
-        if first_region:
-            print(f"Region: {regions[first_region]['match'][0]} {count}")
-        else:
+        print(sorted_regions)
+        print(first_region)
+        if first_region is None:
             print("Регион не найден")
+        else:
+            print(f"Region: {regions[first_region]['match'][0]} {count}")
         print("---")
+        input()
 
-def sort_dict(dictionary, reverse=False):
-     return dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=reverse))
+
+def sort_dict(dictionary):
+     return dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
 
 
 def get_first_dict(dictionary):
@@ -44,13 +49,12 @@ def get_first_dict(dictionary):
         first, value = next(iter(dictionary.items()))
         return first, value
     else:
-        return -1, None
+        return None, None
 
 
 def add_user(users_list, name, user_id, message, region_id=None):
     # Check if the user with the given user_id already exists.
     existing_user = next((user for user in users_list if user.user_id == user_id), None)
-
     if existing_user:
         # User already exists, update the existing user.
         existing_user.add_region(region_id)  # You can add a check for None if needed.
@@ -159,8 +163,8 @@ def parse_telegram_to_excel():
         region_id = find_region_mention(text)
         add_user(users_list, user_name, user_id, text, region_id)
         
-        for user in users_list:
-            user.display_user_info()
+    for user in users_list:
+        user.display_user_info()
 
 # Call the function to execute the code.
 parse_telegram_to_excel()
