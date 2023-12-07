@@ -19,7 +19,6 @@ class User:
     def add_message_count(self):
         self.message_count += 1
 
-    # TODO: If first_region is None then get second element.
     def display_user_info(self):
         print(f"Name: {self.name}")
         print(f"ID: {self.user_id}")
@@ -29,11 +28,10 @@ class User:
         # Sort dictionary descending.
         sorted_regions=sort_dict(self.regions_count)
         # Display the first (max) element from the sorted dictionary.
-        (first_region, count) = get_first_dict(sorted_regions)
+        (first_region, count) = get_first_region(sorted_regions)
         print(sorted_regions)
-        print(first_region)
         if first_region is None:
-            print("Регион не найден")
+            print("Region not found!")
         else:
             print(f"Region: {regions[first_region]['match'][0]} {count}")
         print("---")
@@ -44,12 +42,11 @@ def sort_dict(dictionary):
      return dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
 
 
-def get_first_dict(dictionary):
+def get_first_region(dictionary):
     if dictionary:
-        first, value = next(iter(dictionary.items()))
-        return first, value
-    else:
-        return None, None
+        for key, value in dictionary.items():
+            if key is not None:
+                return key, value
 
 
 def add_user(users_list, name, user_id, message, region_id=None):
