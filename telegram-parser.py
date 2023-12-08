@@ -1,7 +1,7 @@
 import json
+import pandas as pd
 import re
 from datetime import datetime
-from fuzzywuzzy import fuzz
 
 class User:
     def __init__(self, name, user_id, message):
@@ -27,26 +27,16 @@ class User:
 
         # Sort dictionary descending.
         sorted_regions=sort_dict(self.regions_count)
-        # Display the first (max) element from the sorted dictionary.
-        (first_region, count) = get_first_region(sorted_regions)
         print(sorted_regions)
+
+        # Display the first (max) element from the sorted dictionary.
+        first_region, count = get_first_region(sorted_regions)
+              
         if first_region is None:
             print("Region not found!")
         else:
             print(f"Region: {regions[first_region]['match'][0]} {count}")
-        print("---")
-        input()
-
-
-def sort_dict(dictionary):
-     return dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
-
-
-def get_first_region(dictionary):
-    if dictionary:
-        for key, value in dictionary.items():
-            if key is not None:
-                return key, value
+        print("-----")
 
 
 def add_user(users_list, name, user_id, message, region_id=None):
@@ -66,7 +56,40 @@ def add_user(users_list, name, user_id, message, region_id=None):
 
 users_list = []
 
-# TODO: add display name for city and for district.
+
+def sort_dict(dictionary):
+     return dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
+
+
+def get_first_region(dictionary):
+    if dictionary is not None:
+        for key, value in dictionary.items():
+            if key is not None:
+                return key, value
+    return None, None
+
+
+def users_to_excel():
+    data = {
+        "ID": [user.user_id for user in users_list],
+        "Имя": [user.name for user in users_list],
+        "Количество сообщений": [user.message_count for user in users_list],
+    }
+
+    # Add a column for the most frequently occurring region for each user
+    data["Регион"] = [
+        regions[get_first_region(sort_dict(user.regions_count))[0]]['match'][0]
+        if (result := get_first_region(sort_dict(user.regions_count))[0]) is not None
+        else None
+        for user in users_list
+]
+
+    df = pd.DataFrame(data)
+
+    df.to_excel("Соотнесение пользователей с регионом.xlsx", index=False)
+
+
+# TODO: add display city and district names.
 regions = [
     { 'match': [ 'Иркутск' ] },
     { 'match': [ 'Ангарск' ] },
@@ -165,3 +188,4 @@ def parse_telegram_to_excel():
 
 # Call the function to execute the code.
 parse_telegram_to_excel()
+users_to_excel()
