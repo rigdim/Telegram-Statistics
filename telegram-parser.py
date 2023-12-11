@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 import re
+import numpy as np
 from datetime import datetime
 
 class User:
@@ -93,7 +94,7 @@ def users_to_excel():
     data = {
         "ID": [user.user_id for user in users_list],
         "Имя": [user.name for user in users_list],
-        "Количество сообщений": [user.message_count for user in users_list],
+        "Сообщений": [user.message_count for user in users_list],
     }
 
     # Add a column for the most frequently occurring region for each user
@@ -103,7 +104,34 @@ def users_to_excel():
 
     df = pd.DataFrame(data)
 
-    df.to_excel(".\docs\Соотнесение пользователей с регионом.xlsx", index=False)
+    df = df.sort_values(by="Сообщений", ascending=False)
+
+    unique_regions = df["Регион"].unique()
+    region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
+
+    styled_df = (
+        df.style
+        .set_table_styles([{"selector": "", "props": [("border", "1px solid black")]}])  # Add default black borders
+        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column
+        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column
+        .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])  # Apply region-specific background colors
+    )
+
+    with pd.ExcelWriter('.\docs\Соотнесение пользователей с регионом.xlsx', engine='openpyxl') as writer:
+    
+        # Write the DataFrame to the Excel file.
+        styled_df.to_excel(writer, sheet_name='Sheet1', index=False)
+
+        # Access the XlsxWriter workbook and worksheet objects.
+        workbook  = writer.book
+        worksheet = writer.sheets['Sheet1']
+
+        # Set the column width for specific columns.
+        worksheet.column_dimensions['A'].width = 16
+        worksheet.column_dimensions['B'].width = 30
+        worksheet.column_dimensions['C'].width = 10
+        worksheet.column_dimensions['D'].width = 30 
+
 
 
 regions = [
@@ -119,7 +147,7 @@ regions = [
     { 'match': [ 'Усть-Кут' ], 'name_district': 'Усть-Кутский район' },
     { 'match': [ 'Нижнеилимск' ], 'name_district': 'Нижнеилимский район' },
     { 'match': [ 'Зим' ], 'name_district': 'г. Зима и Зиминский район' },
-    { 'match': [ 'Слюдян' ],  'name_district': 'Слюдянский район' },
+    { 'match': [ 'Слюдян' ], 'name_district': 'Слюдянский район' },
     { 'match': [ 'Тулун' ], 'name_city': 'Тулун', 'name_district': 'Тулунский район' },
     { 'match': [ 'Саянск', ], 'name_city': 'Саянск' },
     { 'match': [ 'Эхирит-Булагатск', 'Усть-Ордынск' ], 'name_district': 'Эхирит-Булагатский район' },
@@ -149,9 +177,7 @@ region_endings = [ 'ий', 'ого', 'ому', 'им', 'ом' ]
 
 # Check if the last letters are equal to the provided ending.
 def check_ending(str, ending):
-
     last_letters = str[-len(ending):]
-
     return last_letters == ending
 
 
@@ -167,7 +193,6 @@ def find_region_mention(text):
                         if check_ending(word, ending):
                             return index, "district"
                     return index, "city"
-
     return None, None
 
 def get_users_data():
@@ -193,7 +218,7 @@ def get_users_data():
 
         text = text.replace("\n", " ")
 
-        # Create user or get already existed.
+        # Create user with region that was founded or update already existed.
         region_id, region_type = find_region_mention(text)
         add_user(users_list, user_name, user_id, text, region_id, region_type)
         
