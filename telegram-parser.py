@@ -8,13 +8,15 @@ class User:
         self.name = name
         self.user_id = user_id
         self.message = message
-        self.message_count = 1  # Initialize message count to 1
-        self.regions_count = {}  # Dictionary to store region counts
-        self.region_type = ''
+        self.message_count = 1
+        self.regions_count = {}  # Nested dictionary to store region counts
 
-    def add_region(self, region_id):
-        # Add or update the count for the specified region
-        self.regions_count[region_id] = self.regions_count.get(region_id, 0) + 1
+    def add_region(self, region_id, region_type):
+        # Add or update the count for the specified region and type
+        region_dict = self.regions_count.get(region_id, {"city": 0, "district": 0})
+        if region_type is not None:
+            region_dict[region_type] += 1
+        self.regions_count[region_id] = region_dict
 
     def add_message_count(self):
         self.message_count += 1
@@ -26,31 +28,49 @@ class User:
         print(f"Message Count: {self.message_count}")
 
         # Sort dictionary descending.
-        sorted_regions=sort_dict(self.regions_count)
+        sorted_regions = sort_dict(self.regions_count)
         print(sorted_regions)
 
         # Display the first (max) element from the sorted dictionary.
         first_region, count = get_first_region(sorted_regions)
-              
+
         if first_region is None:
             print("Region not found!")
         else:
-            print(f"Region: {regions[first_region]['match'][0]} {count}")
+            city_count = count.get("city", 0)
+            district_count = count.get("district", 0)
+            print(get_first_region_name(self))
         print("-----")
 
+    
+def get_first_region_name(user):
+    # Get the most frequent region based on 'city' and 'district' counts
+        sorted_regions = sort_dict(user.regions_count)
+        first_region, count = get_first_region(sorted_regions)
 
-def add_user(users_list, name, user_id, message, region_id=None):
+        if first_region is not None:
+            city_count = count.get("city", 0)
+            district_count = count.get("district", 0)
+            if (city_count > district_count) and ('name_city' in regions[first_region]):
+                return regions[first_region]['name_city']
+            elif ('name_district' in regions[first_region]):
+                return regions[first_region]['name_district']
+            else:
+                return regions[first_region][0]
+            
+
+def add_user(users_list, name, user_id, message, region_id=None, region_type=None):
     # Check if the user with the given user_id already exists.
     existing_user = next((user for user in users_list if user.user_id == user_id), None)
     if existing_user:
         # User already exists, update the existing user.
-        existing_user.add_region(region_id)  # You can add a check for None if needed.
+        existing_user.add_region(region_id, region_type)  # You can add a check for None if needed.
         existing_user.add_message_count()
     else:
         # User does not exist, create a new user and add to the list.
         new_user = User(name, user_id, message)
-        if region_id is not None:
-            new_user.add_region(region_id)
+        if region_id is not None and region_type is not None:
+            new_user.add_region(region_id, region_type)
         users_list.append(new_user)
 
 
@@ -58,7 +78,7 @@ users_list = []
 
 
 def sort_dict(dictionary):
-     return dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
+     return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
 
 
 def get_first_region(dictionary):
@@ -78,56 +98,50 @@ def users_to_excel():
 
     # Add a column for the most frequently occurring region for each user
     data["Регион"] = [
-        regions[get_first_region(sort_dict(user.regions_count))[0]]['match'][0]
-        if (result := get_first_region(sort_dict(user.regions_count))[0]) is not None
-        else None
-        for user in users_list
+        get_first_region_name(user) for user in users_list
 ]
 
     df = pd.DataFrame(data)
 
-    df.to_excel("Соотнесение пользователей с регионом.xlsx", index=False)
+    df.to_excel(".\docs\Соотнесение пользователей с регионом.xlsx", index=False)
 
 
-# TODO: add display city and district names.
 regions = [
-    { 'match': [ 'Иркутск' ] },
-    { 'match': [ 'Ангарск' ] },
-    { 'match': [ 'Братск' ] },
-    { 'match': [ 'Усть-Илимск' ] },
-    { 'match': [ 'Усоль' ] },
-    { 'match': [ 'Тайшет' ] },
-    { 'match': [ 'Шелехов' ] },
-    { 'match': [ 'г. Черемхово' ] },
-    { 'match': [ 'Нижнеудинск' ] },
-    { 'match': [ 'Усть-Кут' ] },
-    { 'match': [ 'Нижнеилимск' ] },
-    { 'match': [ 'Зим' ] },
-    { 'match': [ 'Слюдян' ] },
-    { 'match': [ 'Тулун' ] },
-    { 'match': [ 'Саянск', ] },
-    { 'match': [ 'Эхирит-Булагатск' ] },
-    { 'match': [ 'Черемхов' ] },
-    { 'match': [ 'Куйтун' ] },
-    { 'match': [ 'Чунск' ] },
-    { 'match': [ 'Залари' ] },
-    { 'match': [ 'Бохан' ] },
-    { 'match': [ 'Аларск', 'Кутулик' ] },
-    { 'match': [ 'Осинск' ] },
-    { 'match': [ 'Киренск' ] },
-    { 'match': [ 'Свирск' ] },
-    { 'match': [ 'Качуг' ] },
-    { 'match': [ 'Казачинско-Ленск' ] },
-    { 'match': [ 'Нукутск' ] },
-    { 'match': [ 'Усть-Уд' ] },
-    { 'match': [ 'Бодайб' ] },
-    { 'match': [ 'Усть-Илимск' ] },
-    { 'match': [ 'Баяндаевск', 'Баяндай' ] },
-    { 'match': [ 'Ольхон' ] },
-    { 'match': [ 'Жигалов' ] },
-    { 'match': [ 'Балаганск' ] },
-    { 'match': [ 'Мамско-Чуйск', 'Мама' ] },
-    { 'match': [ 'Катангск' ] }
+    { 'match': [ 'Иркутск' ], 'name_city': 'Иркутск', 'name_district': 'Иркутский район' },
+    { 'match': [ 'Ангарск' ], 'name_district': 'Ангарский ГО' },
+    { 'match': [ 'Братск' ], 'name_city': 'Братск', 'name_district': 'Братский район' },
+    { 'match': [ 'Усть-Илимск' ], 'name_city': 'Усть-Илимск', 'name_district': 'Усть-Илимский район' },
+    { 'match': [ 'Усоль' ], 'name_city': 'Усолье-Сибирское', 'name_district': 'Усольский район' },
+    { 'match': [ 'Тайшет' ], 'name_city': 'Тайшет', 'name_district': 'Тайшетский район' },
+    { 'match': [ 'Шелехов' ], 'name_district': 'Шелеховский  район' },
+    { 'match': [ 'Черемхов' ], 'name_city': 'Черемхово', 'name_district': 'Черемховский район' },
+    { 'match': [ 'Нижнеудинск' ], 'name_district': 'Нижнеудинский район' },
+    { 'match': [ 'Усть-Кут' ], 'name_district': 'Усть-Кутский район' },
+    { 'match': [ 'Нижнеилимск' ], 'name_district': 'Нижнеилимский район' },
+    { 'match': [ 'Зим' ], 'name_district': 'г. Зима и Зиминский район' },
+    { 'match': [ 'Слюдян' ],  'name_district': 'Слюдянский район' },
+    { 'match': [ 'Тулун' ], 'name_city': 'Тулун', 'name_district': 'Тулунский район' },
+    { 'match': [ 'Саянск', ], 'name_city': 'Саянск' },
+    { 'match': [ 'Эхирит-Булагатск', 'Усть-Ордынск' ], 'name_district': 'Эхирит-Булагатский район' },
+    { 'match': [ 'Куйтун' ], 'name_district': 'Куйтунский район' },
+    { 'match': [ 'Чунск' ], 'name_district': 'Чунский район' },
+    { 'match': [ 'Залари' ], 'name_district': 'Заларийский район' },
+    { 'match': [ 'Бохан' ], 'name_district': 'Боханский район' },
+    { 'match': [ 'Аларск', 'Кутулик' ], 'name_district': 'Аларский район' },
+    { 'match': [ 'Осинск' ], 'name_district': 'Осинский район' },
+    { 'match': [ 'Киренск' ], 'name_district': 'Киренский район' },
+    { 'match': [ 'Свирск' ], 'name_district': 'Свирский район' },
+    { 'match': [ 'Качуг' ], 'name_district': 'Качугский район' },
+    { 'match': [ 'Казачинско-Ленск' ], 'name_district': 'Казачинско-Ленский район' },
+    { 'match': [ 'Нукутск' ], 'name_district': 'Нукутский район' },
+    { 'match': [ 'Усть-Уд' ], 'name_district': 'Усть-Удинский район' },
+    { 'match': [ 'Бодайб' ], 'name_district': 'Бодайбинский район' },
+    { 'match': [ 'Баяндаевск', 'Баяндай' ], 'name_district': 'Баяндаевский район' },
+    { 'match': [ 'Ольхон' ], 'name_district': 'Ольхонский район' },
+    { 'match': [ 'Жигалов' ], 'name_district': 'Жигаловский район' },
+    { 'match': [ 'Балаганск' ], 'name_district': 'Балаганский район' },
+    { 'match': [ 'Мамско-Чуйск', 'Мама' ], 'name_district': 'Мамско-Чуйский район' },
+    { 'match': [ 'Катангск' ], 'name_district': 'Катангский район' }
 ]
 
 # Word endings for region comparemet.
@@ -143,25 +157,24 @@ def check_ending(str, ending):
 
 def find_region_mention(text):
 
-    words = re.split('\\. |\\, |\\.| ', text)
+    words = re.split(r'\. |, |\.| ', text)
 
-    # Check each word for similarity to region names.
     for word in words:
         for index, region in enumerate(regions):
             for region_match in region['match']:
                 if region_match in word:
                     for ending in region_endings:
                         if check_ending(word, ending):
-                            return index
-                        return index
-    
+                            return index, "district"
+                    return index, "city"
 
-def parse_telegram_to_excel():
+    return None, None
+
+def get_users_data():
     with open('./docs/result.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
 
     for message in data["messages"]:
-
         if message["type"] != "message":
             continue
 
@@ -179,13 +192,14 @@ def parse_telegram_to_excel():
             text = txt_content
 
         text = text.replace("\n", " ")
+
         # Create user or get already existed.
-        region_id = find_region_mention(text)
-        add_user(users_list, user_name, user_id, text, region_id)
+        region_id, region_type = find_region_mention(text)
+        add_user(users_list, user_name, user_id, text, region_id, region_type)
         
     for user in users_list:
         user.display_user_info()
 
 # Call the function to execute the code.
-parse_telegram_to_excel()
+get_users_data()
 users_to_excel()
