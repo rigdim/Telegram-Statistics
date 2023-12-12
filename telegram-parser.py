@@ -106,32 +106,31 @@ def users_to_excel():
 
     df = df.sort_values(by="Сообщений", ascending=False)
 
-    unique_regions = df["Регион"].unique()
-    region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
+    # unique_regions = df["Регион"].unique()
+    # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
 
     styled_df = (
         df.style
-        .set_table_styles([{"selector": "", "props": [("border", "1px solid black")]}])  # Add default black borders
-        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column
-        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column
-        .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])  # Apply region-specific background colors
+        .set_table_styles([{"selector": "", "props": [("border", "1px solid black")]}])  # Add default black borders.
+        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
+        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
+        # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
     )
 
     with pd.ExcelWriter('.\docs\Соотнесение пользователей с регионом.xlsx', engine='openpyxl') as writer:
     
         # Write the DataFrame to the Excel file.
-        styled_df.to_excel(writer, sheet_name='Sheet1', index=False)
+        styled_df.to_excel(writer, sheet_name='Пользователи и регионы', index=False)
 
         # Access the XlsxWriter workbook and worksheet objects.
         workbook  = writer.book
-        worksheet = writer.sheets['Sheet1']
+        worksheet = writer.sheets['Пользователи и регионы']
 
         # Set the column width for specific columns.
         worksheet.column_dimensions['A'].width = 16
         worksheet.column_dimensions['B'].width = 30
-        worksheet.column_dimensions['C'].width = 10
-        worksheet.column_dimensions['D'].width = 30 
-
+        worksheet.column_dimensions['C'].width = 12
+        worksheet.column_dimensions['D'].width = 30
 
 
 regions = [
