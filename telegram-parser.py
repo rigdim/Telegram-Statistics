@@ -1,8 +1,8 @@
 import json
 import pandas as pd
 import re
-import numpy as np
 from datetime import datetime
+
 
 class User:
     def __init__(self, name, user_id, message):
@@ -10,10 +10,10 @@ class User:
         self.user_id = user_id
         self.message = message
         self.message_count = 1
-        self.regions_count = {}  # Nested dictionary to store region counts
+        self.regions_count = {}  # Nested dictionary to store the region ID and the number of mentions of both as a city and as a district.
 
     def add_region(self, region_id, region_type):
-        # Add or update the count for the specified region and type
+        # Add or update the count for the specified region and type.
         region_dict = self.regions_count.get(region_id, {"city": 0, "district": 0})
         if region_type is not None:
             region_dict[region_type] += 1
@@ -32,32 +32,42 @@ class User:
         sorted_regions = sort_dict(self.regions_count)
         print(sorted_regions)
 
-        # Display the first (max) element from the sorted dictionary.
-        first_region, count = get_first_region(sorted_regions)
-
-        if first_region is None:
+        first_region_name = get_first_region_name(self)
+        if first_region_name is None:
             print("Region not found!")
         else:
-            city_count = count.get("city", 0)
-            district_count = count.get("district", 0)
-            print(get_first_region_name(self))
+            print(first_region_name)
         print("-----")
+        input()
 
-    
+
+# Sort regions by sum of its mentions as a city and as a district.
+def sort_dict(dictionary):
+     return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
+
+
+def get_first_region(dictionary):
+    if dictionary is not None:
+        for key, value in dictionary.items():
+            if key is not None:
+                return key, value
+    return None, None   
+
+
+# Get an appropriate region display name based on 'city' and 'district' number of mentions.
 def get_first_region_name(user):
-    # Get the most frequent region based on 'city' and 'district' counts
-        sorted_regions = sort_dict(user.regions_count)
-        first_region, count = get_first_region(sorted_regions)
+    first_region, mentions = get_first_region(sort_dict(user.regions_count))
+    first_region, mentions = get_first_region(sort_dict(user.regions_count))
 
-        if first_region is not None:
-            city_count = count.get("city", 0)
-            district_count = count.get("district", 0)
-            if (city_count > district_count) and ('name_city' in regions[first_region]):
-                return regions[first_region]['name_city']
-            elif ('name_district' in regions[first_region]):
-                return regions[first_region]['name_district']
-            else:
-                return regions[first_region][0]
+    if first_region is not None:
+        city_count = mentions.get("city", 0)
+        district_count = mentions.get("district", 0)
+        if (city_count > district_count) and ('name_city' in regions[first_region]):
+            return regions[first_region]['name_city']
+        elif ('name_district' in regions[first_region]):
+            return regions[first_region]['name_district']
+        else:
+            return regions[first_region][0]
             
 
 def add_user(users_list, name, user_id, message, region_id=None, region_type=None):
@@ -65,7 +75,7 @@ def add_user(users_list, name, user_id, message, region_id=None, region_type=Non
     existing_user = next((user for user in users_list if user.user_id == user_id), None)
     if existing_user:
         # User already exists, update the existing user.
-        existing_user.add_region(region_id, region_type)  # You can add a check for None if needed.
+        existing_user.add_region(region_id, region_type)
         existing_user.add_message_count()
     else:
         # User does not exist, create a new user and add to the list.
@@ -78,18 +88,6 @@ def add_user(users_list, name, user_id, message, region_id=None, region_type=Non
 users_list = []
 
 
-def sort_dict(dictionary):
-     return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
-
-
-def get_first_region(dictionary):
-    if dictionary is not None:
-        for key, value in dictionary.items():
-            if key is not None:
-                return key, value
-    return None, None
-
-
 def users_to_excel():
     data = {
         "ID": [user.user_id for user in users_list],
@@ -97,7 +95,7 @@ def users_to_excel():
         "Сообщений": [user.message_count for user in users_list],
     }
 
-    # Add a column for the most frequently occurring region for each user
+    # Add a column for the most frequently occurring region for each user.
     data["Регион"] = [
         get_first_region_name(user) for user in users_list
 ]
@@ -117,16 +115,14 @@ def users_to_excel():
         # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
     )
 
-    with pd.ExcelWriter('.\docs\Соотнесение пользователей с регионом.xlsx', engine='openpyxl') as writer:
+    with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl') as writer:
     
         # Write the DataFrame to the Excel file.
         styled_df.to_excel(writer, sheet_name='Пользователи и регионы', index=False)
 
-        # Access the XlsxWriter workbook and worksheet objects.
         workbook  = writer.book
         worksheet = writer.sheets['Пользователи и регионы']
 
-        # Set the column width for specific columns.
         worksheet.column_dimensions['A'].width = 16
         worksheet.column_dimensions['B'].width = 30
         worksheet.column_dimensions['C'].width = 12
@@ -171,8 +167,10 @@ regions = [
     { 'match': [ 'Катангск' ], 'name_district': 'Катангский район' }
 ]
 
-# Word endings for region comparemet.
+
+# Word endings to be recognized as district.
 region_endings = [ 'ий', 'ого', 'ому', 'им', 'ом' ] 
+
 
 # Check if the last letters are equal to the provided ending.
 def check_ending(str, ending):
@@ -194,6 +192,8 @@ def find_region_mention(text):
                     return index, "city"
     return None, None
 
+
+# Load .json file and get users data from it.
 def get_users_data():
     with open('./docs/result.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
@@ -223,6 +223,7 @@ def get_users_data():
         
     for user in users_list:
         user.display_user_info()
+
 
 # Call the function to execute the code.
 get_users_data()
