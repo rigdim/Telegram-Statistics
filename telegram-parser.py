@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 import re
+from pymystem3 import Mystem
 from datetime import datetime
 
 
@@ -8,9 +9,13 @@ class User:
     def __init__(self, name, user_id, message):
         self.name = name
         self.user_id = user_id
-        self.message = message
-        self.message_count = 1
+        self.messages = message
+        self.messages_count = 1
         self.regions_count = {}  # Nested dictionary to store the region ID and the number of mentions of both as a city and as a district.
+        self.region = None
+
+    def add_message(self, message):
+        self.messages += '\n' + message
 
     def add_region(self, region_id, region_type):
         # Add or update the count for the specified region and type.
@@ -19,28 +24,42 @@ class User:
             region_dict[region_type] += 1
         self.regions_count[region_id] = region_dict
 
-    def add_message_count(self):
-        self.message_count += 1
+    def add_messages_count(self):
+        self.messages_count += 1
 
     def display_user_info(self):
         print(f"Name: {self.name}")
         print(f"ID: {self.user_id}")
-        print(f"Message: {self.message}")
-        print(f"Message Count: {self.message_count}")
+        print(f"Message: {self.messages[:200]}")
+        print(f"Message Count: {self.messages_count}")
 
         # Sort dictionary descending.
         sorted_regions = sort_dict(self.regions_count)
-        print(sorted_regions)
+        for key, value in sorted_regions.items():
+            if key is not None:
+                print(f"* {regions[key]['match'][0]} - city: {value.get('city')}, district: {value.get('district')}")
 
-        first_region_name = get_first_region_name(self)
-        if first_region_name is None:
+        if self.region is None:
             print("Region not found!")
         else:
-            print(first_region_name)
+            print(f"Region: {self.region}")
         print("-----")
-        input()
 
+    # Get an appropriate region display name based on 'city' and 'district' number of mentions.
+    def set_region(self):
+        first_region, mentions = get_first_region(sort_dict(self.regions_count))
 
+        if first_region is not None:
+            city_count = mentions.get("city", 0)
+            district_count = mentions.get("district", 0)
+            if (city_count > district_count) and ('name_city' in regions[first_region]):
+                self.region = regions[first_region]['name_city']
+            elif ('name_district' in regions[first_region]):
+                self.region = regions[first_region]['name_district']
+            else:
+                self.region = None
+        
+        
 # Sort regions by sum of its mentions as a city and as a district.
 def sort_dict(dictionary):
      return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
@@ -52,22 +71,6 @@ def get_first_region(dictionary):
             if key is not None:
                 return key, value
     return None, None   
-
-
-# Get an appropriate region display name based on 'city' and 'district' number of mentions.
-def get_first_region_name(user):
-    first_region, mentions = get_first_region(sort_dict(user.regions_count))
-    first_region, mentions = get_first_region(sort_dict(user.regions_count))
-
-    if first_region is not None:
-        city_count = mentions.get("city", 0)
-        district_count = mentions.get("district", 0)
-        if (city_count > district_count) and ('name_city' in regions[first_region]):
-            return regions[first_region]['name_city']
-        elif ('name_district' in regions[first_region]):
-            return regions[first_region]['name_district']
-        else:
-            return regions[first_region][0]
             
 
 def add_user(users_list, name, user_id, message, region_id=None, region_type=None):
@@ -75,8 +78,9 @@ def add_user(users_list, name, user_id, message, region_id=None, region_type=Non
     existing_user = next((user for user in users_list if user.user_id == user_id), None)
     if existing_user:
         # User already exists, update the existing user.
+        existing_user.add_message(message)
         existing_user.add_region(region_id, region_type)
-        existing_user.add_message_count()
+        existing_user.add_messages_count()
     else:
         # User does not exist, create a new user and add to the list.
         new_user = User(name, user_id, message)
@@ -92,13 +96,13 @@ def users_to_excel():
     data = {
         "ID": [user.user_id for user in users_list],
         "Имя": [user.name for user in users_list],
-        "Сообщений": [user.message_count for user in users_list],
+        "Сообщений": [user.messages_count for user in users_list],
     }
 
     # Add a column for the most frequently occurring region for each user.
     data["Регион"] = [
-        get_first_region_name(user) for user in users_list
-]
+        user.region for user in users_list
+    ]
 
     df = pd.DataFrame(data)
 
@@ -222,9 +226,56 @@ def get_users_data():
         add_user(users_list, user_name, user_id, text, region_id, region_type)
         
     for user in users_list:
+        user.set_region()
         user.display_user_info()
+
+
+# Keywords with their variations
+keywords = [
+    {"электроэнергии", "электричество", "свет"},
+    {"сеть", "сс"},
+    {"авария", "происшествие", "поломка"}
+]
+
+# Dictionary to store the pivot table data
+pivot_table_data = {}
+
+mystem = Mystem()
+
+# Normalize keywords using pymystem3
+def normalize_word(word):
+    lemmas = mystem.lemmatize(word.lower())
+    return lemmas[0].strip() if lemmas else word.lower()
+
+def create_pivot_table():
+    
+    print("Start")
+    # Initialize pivot table data
+    for region in regions:
+        region_name_city = region.get("name_city", 0)
+        region_name_district = region.get("name_district", 0)
+        if region_name_city:
+            pivot_table_data[region_name_city] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
+        if region_name_district:
+            pivot_table_data[region_name_district] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
+
+    # Update pivot table data based on user messages
+    for user in users_list:
+        for keyword_set in keywords:
+            for keyword in keyword_set:
+                if user.region and keyword in user.messages:
+                    pivot_table_data[user.region][keyword] += 1
+
+    # Create a DataFrame from pivot_table_data
+    pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
+
+    # Write the pivot table DataFrame to the Excel file
+    with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl', mode='a') as writer:
+        pivot_table_df.to_excel(writer, sheet_name='Статистика по проблемам', index=True)
+    print("End")
 
 
 # Call the function to execute the code.
 get_users_data()
 users_to_excel()
+create_pivot_table()
