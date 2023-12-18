@@ -3,9 +3,11 @@
 
 Python scripts to get statistics based on Telegram chat messages export.
 
-It takes (`json`) file and parse it into tabular format (`xlsx`) with additional information.
+It takes (`.json`) file and parse it into tabular format (`.xlsx`) with additional information.
 
 ## How to use it
+
+Move to script directory using `cd`.
 
 Create venv & install requirements:
 
@@ -14,7 +16,7 @@ Create venv & install requirements:
 ```bash
 python -m venv venv
 
-venv/Source/activate
+venv\Sripts\activate
 
 pip install -r requirements.txt
 ```
@@ -29,14 +31,19 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Using Telegram's Desktop or Web interfaces, go to the chat you want to parse, click on the options button (three dots in the upper right corner) and them click on `Export chat history`. In the dialog window, right next to `Format`, chose `json`.
+### Export
 
-After the backup is completed, Telegram will generate a `results.json` file. Next you need to copy or move it to script directory and optionally rename it.
+Using Telegram's Desktop or Web interfaces, go to the chat you want to parse, click on the options button (three dots in the upper right corner) and them click on ***Export chat history***.
 
-Command to run the script:
+In the dialog window, right next to ***Format***, choose `.json`.
 
-```bash
-python telegram-chat-parser.py <jsonfile.json>
-```
+![Chat export](https://dl.dropbox.com/scl/fi/3li1hd5sldafiy7rtjjce/export_telegram.png?rlkey=to66ro2ios4jsy3oz0g1d6qu9&dl=0)
 
-For chat backup in `results.json`, a `.xlsx` file will be created in the same directory.
+After the backup is completed, Telegram will generate a `results.json` file. Next you need to copy or move it to `./docs` folder in script directory.
+
+### Run script
+
+
+Run the script using `.bat` file. 
+
+A `.xlsx` file will be created in `./docs` folder.
