@@ -260,11 +260,14 @@ def create_pivot_table():
             pivot_table_data[region_name_district] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
 
     # Update pivot table data based on user messages
+    
     for user in users_list:
+        splited_messages = re.split('\n', user.messages)
         for keyword_set in keywords:
             for keyword in keyword_set:
-                if user.region and keyword in user.messages:
-                    pivot_table_data[user.region][keyword] += 1
+                for message in splited_messages:
+                    if user.region and keyword in message:
+                        pivot_table_data[user.region][keyword] += 1
 
     # Create a DataFrame from pivot_table_data
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
