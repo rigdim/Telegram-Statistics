@@ -1,8 +1,10 @@
 import json
 import pandas as pd
 import re
+import numpy
 from pymystem3 import Mystem
 from datetime import datetime
+from openpyxl.styles import Border, Side
 
 
 class User:
@@ -90,47 +92,6 @@ def add_user(users_list, name, user_id, message, region_id=None, region_type=Non
 
 
 users_list = []
-
-
-def users_to_excel():
-    data = {
-        "ID": [user.user_id for user in users_list],
-        "Имя": [user.name for user in users_list],
-        "Сообщений": [user.messages_count for user in users_list],
-    }
-
-    # Add a column for the most frequently occurring region for each user.
-    data["Регион"] = [
-        user.region for user in users_list
-    ]
-
-    df = pd.DataFrame(data)
-
-    df = df.sort_values(by="Сообщений", ascending=False)
-
-    # unique_regions = df["Регион"].unique()
-    # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
-
-    styled_df = (
-        df.style
-        .set_table_styles([{"selector": "", "props": [("border", "1px solid black")]}])  # Add default black borders.
-        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
-        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
-        # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
-    )
-
-    with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl') as writer:
-    
-        # Write the DataFrame to the Excel file.
-        styled_df.to_excel(writer, sheet_name='Пользователи и регионы', index=False)
-
-        workbook  = writer.book
-        worksheet = writer.sheets['Пользователи и регионы']
-
-        worksheet.column_dimensions['A'].width = 16
-        worksheet.column_dimensions['B'].width = 30
-        worksheet.column_dimensions['C'].width = 12
-        worksheet.column_dimensions['D'].width = 30
 
 
 regions = [
@@ -230,6 +191,43 @@ def get_users_data():
         user.display_user_info()
 
 
+def users_to_excel():
+    data = {
+        "ID": [user.user_id for user in users_list],
+        "Имя": [user.name for user in users_list],
+        "Сообщений": [user.messages_count for user in users_list],
+    }
+
+    # Add a column for the most frequently occurring region for each user.
+    data["Регион"] = [
+        user.region for user in users_list
+    ]
+
+    df = pd.DataFrame(data)
+
+    df = df.sort_values(by="Сообщений", ascending=False)
+
+    # unique_regions = df["Регион"].unique()
+    # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
+
+    styled_df = (
+        df.style
+        .set_table_styles([{"selector": "", "props": [("border", "1px solid black")]}])  # Add default black borders.
+        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
+        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
+        # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
+    )
+
+    with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl') as writer:
+    
+        # Write the DataFrame to the Excel file.
+        styled_df.to_excel(writer, sheet_name='Пользователи и регионы', index=False)
+
+        worksheet = writer.sheets['Пользователи и регионы']
+        add_borders(worksheet)
+        set_autowidth(worksheet)
+
+
 # Keywords with their variations
 keywords = [
     {"электроэнергии", "электричество", "свет"},
@@ -249,8 +247,7 @@ def normalize_word(word):
 
 def create_pivot_table():
     
-    print("Start")
-    # Initialize pivot table data
+    # Initialize pivot table.
     for region in regions:
         region_name_city = region.get("name_city", 0)
         region_name_district = region.get("name_district", 0)
@@ -259,8 +256,7 @@ def create_pivot_table():
         if region_name_district:
             pivot_table_data[region_name_district] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
 
-    # Update pivot table data based on user messages
-    
+    # Update pivot table data based on user messages.
     for user in users_list:
         splited_messages = re.split('\n', user.messages)
         for keyword_set in keywords:
@@ -269,13 +265,49 @@ def create_pivot_table():
                     if user.region and keyword in message:
                         pivot_table_data[user.region][keyword] += 1
 
-    # Create a DataFrame from pivot_table_data
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
-    # Write the pivot table DataFrame to the Excel file
     with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl', mode='a') as writer:
         pivot_table_df.to_excel(writer, sheet_name='Статистика по проблемам', index=True)
-    print("End")
+
+        worksheet = writer.sheets['Статистика по проблемам']
+
+        keywords_lenght = len({keyword: 0 for keyword_set in keywords for keyword in keyword_set})
+
+        add_borders(worksheet)
+        set_autowidth(worksheet)
+
+
+def get_column_letter(index):
+    letter_code = ord('A') + index
+    return chr(letter_code)
+
+
+def add_borders(worksheet):
+    for row in worksheet.rows:
+        for cell in row:
+            cell.border = Border(left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin'))
+
+
+def set_autowidth(worksheet):
+    for index, col, in enumerate(worksheet.columns):
+        max_length = 0
+        min_width = 8
+        column = [cell for cell in col]
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = (max_length + 3)
+        if adjusted_width < min_width:
+            adjusted_width = min_width
+        worksheet.column_dimensions[get_column_letter(index)].width = adjusted_width
+
 
 
 # Call the function to execute the code.
