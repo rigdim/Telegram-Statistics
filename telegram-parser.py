@@ -235,44 +235,97 @@ keywords = [
     {"авария", "происшествие", "поломка"}
 ]
 
-# Dictionary to store the pivot table data
+# All displayable names for regions.
+region_names = []
+
+def set_region_names():
+    for region in regions:
+
+        region_name_city = region.get("name_city", 0)
+        if region_name_city:
+            region_names.append(region_name_city)
+
+        region_name_district = region.get("name_district", 0)
+        if region_name_district:
+            region_names.append(region_name_district)
+
+
+
+# Dictionary to store the pivot table data.
 pivot_table_data = {}
 
 mystem = Mystem()
 
 # Normalize keywords using pymystem3
-def normalize_word(word):
-    lemmas = mystem.lemmatize(word.lower())
-    return lemmas[0].strip() if lemmas else word.lower()
+def normalize_words(words):
+    lemmas = mystem.lemmatize(words.lower())
+    lemmatized_words = [word for word in lemmas if word.isalpha()]
+    if len(lemmatized_words) == 1:
+        return lemmatized_words[0]
+    return lemmatized_words
+
+# Count words and delete duplicates.
+def word_count(text):
+    words = re.split(r'\n|\. |, |\.| ', text)
+    cleared_words = [word for word in words if word.isalpha()]
+    word_dict = {}
+    for clear_word in cleared_words:
+        clear_word = clear_word.lower()
+        word_dict[clear_word] = word_dict.get(clear_word, 0) + 1
+    return word_dict
+
+def find_word_number(target_word, text):
+    try:
+        word_number = text.index(target_word)
+        return word_number
+    except ValueError:
+        return None
+
+def find_keyword(keyword, text):
+
+    nomalized_keyword = normalize_words(keyword)
+    normalized_words = normalize_words(text)
+
+    if nomalized_keyword in normalized_words:
+        return find_word_number(nomalized_keyword, normalized_words)
+    else:
+        return -1
 
 def create_pivot_table():
-    
-    # Initialize pivot table.
-    for region in regions:
-        region_name_city = region.get("name_city", 0)
-        region_name_district = region.get("name_district", 0)
-        if region_name_city:
-            pivot_table_data[region_name_city] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
-        if region_name_district:
-            pivot_table_data[region_name_district] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
 
-    # Update pivot table data based on user messages.
-    for user in users_list:
-        splited_messages = re.split('\n', user.messages)
+    set_region_names()
+
+    # Initialize pivot table.
+    for region_name in region_names:
+        pivot_table_data[region_name] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
+
+        all_region_messages = ""
+        clear_messages = ""
+
+        # Get all messages for corresponding region.
+        for user in users_list:
+            if user.region == region_name:
+                all_region_messages += " " + user.messages
+
+        word_count_dict =  word_count(all_region_messages)
+
+        for word in word_count_dict.keys():
+            clear_messages += " " + word
+
+        # Check if keyword in messages and fill out it to the table.
         for keyword_set in keywords:
             for keyword in keyword_set:
-                for message in splited_messages:
-                    if user.region and keyword in message:
-                        pivot_table_data[user.region][keyword] += 1
-
+                print(f"Keyword: {keyword}")
+                position = find_keyword(keyword, clear_messages)
+                if position >= 0:
+                    pivot_table_data[region_name][keyword] += list(word_count_dict.values())[position]
+            
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
     with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl', mode='a') as writer:
         pivot_table_df.to_excel(writer, sheet_name='Статистика по проблемам', index=True)
 
         worksheet = writer.sheets['Статистика по проблемам']
-
-        keywords_lenght = len({keyword: 0 for keyword_set in keywords for keyword in keyword_set})
 
         add_borders(worksheet)
         set_autowidth(worksheet)
