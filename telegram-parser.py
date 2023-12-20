@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 import re
-import numpy
+import sys
 from pymystem3 import Mystem
 from datetime import datetime
 from openpyxl.styles import Border, Side
@@ -32,7 +32,6 @@ class User:
     def display_user_info(self):
         print(f"Name: {self.name}")
         print(f"ID: {self.user_id}")
-        print(f"Message: {self.messages[:200]}")
         print(f"Message Count: {self.messages_count}")
 
         # Sort dictionary descending.
@@ -45,7 +44,7 @@ class User:
             print("Region not found!")
         else:
             print(f"Region: {self.region}")
-        print("-----")
+        print("-" * 10)
 
     # Get an appropriate region display name based on 'city' and 'district' number of mentions.
     def set_region(self):
@@ -109,7 +108,7 @@ regions = [
     { 'match': [ 'Зим' ], 'name_district': 'г. Зима и Зиминский район' },
     { 'match': [ 'Слюдян' ], 'name_district': 'Слюдянский район' },
     { 'match': [ 'Тулун' ], 'name_city': 'Тулун', 'name_district': 'Тулунский район' },
-    { 'match': [ 'Саянск', ], 'name_city': 'Саянск' },
+    { 'match': [ 'Саянск' ], 'name_city': 'Саянск' },
     { 'match': [ 'Эхирит-Булагатск', 'Усть-Ордынск' ], 'name_district': 'Эхирит-Булагатский район' },
     { 'match': [ 'Куйтун' ], 'name_district': 'Куйтунский район' },
     { 'match': [ 'Чунск' ], 'name_district': 'Чунский район' },
@@ -185,7 +184,7 @@ def get_users_data():
         # Create user with region that was founded or update already existed.
         region_id, region_type = find_region_mention(text)
         add_user(users_list, user_name, user_id, text, region_id, region_type)
-        
+    
     for user in users_list:
         user.set_region()
         user.display_user_info()
@@ -296,7 +295,10 @@ def create_pivot_table():
     set_region_names()
 
     # Initialize pivot table.
-    for region_name in region_names:
+    for i, region_name in enumerate(region_names):
+        
+        show_progress(iteration=i, total=len(region_names), suffix=region_name)
+
         pivot_table_data[region_name] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
 
         all_region_messages = ""
@@ -315,7 +317,6 @@ def create_pivot_table():
         # Check if keyword in messages and fill out it to the table.
         for keyword_set in keywords:
             for keyword in keyword_set:
-                print(f"Keyword: {keyword}")
                 position = find_keyword(keyword, clear_messages)
                 if position >= 0:
                     pivot_table_data[region_name][keyword] += list(word_count_dict.values())[position]
@@ -361,9 +362,20 @@ def set_autowidth(worksheet):
             adjusted_width = min_width
         worksheet.column_dimensions[get_column_letter(index)].width = adjusted_width
 
-
+def show_progress(iteration, total, prefix='Прогресс:', suffix='', length=25, fill='█'):
+    if iteration == (total - 1):
+        percent = 100.0
+        bar = fill * length
+    else:
+        percent = ("{0:.1f}").format(100 * (iteration / float(total)))
+        filled_length = int(length * iteration // total)
+        bar = fill * filled_length + '-' * (length - filled_length)
+    sys.stdout.write('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix))
+    sys.stdout.flush()
 
 # Call the function to execute the code.
+print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
 get_users_data()
 users_to_excel()
+print("\nПОСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
 create_pivot_table()
