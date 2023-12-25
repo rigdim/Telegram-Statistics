@@ -204,7 +204,7 @@ def users_to_excel():
 
     df = pd.DataFrame(data)
 
-    df = df.sort_values(by="Сообщений", ascending=False)
+    df = df.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
 
     # unique_regions = df["Регион"].unique()
     # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
