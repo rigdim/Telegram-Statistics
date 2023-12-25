@@ -229,15 +229,18 @@ def users_to_excel():
 
 # Keywords with their variations
 keywords = [
-    {"электроэнергии", "электричество", "свет"},
-    {"сеть", "сс"},
-    {"авария", "происшествие", "поломка"}
+    ["электроэнергия", "электричество", "свет", "ээ", "эл", "э"],
+    ["сеть", "связь", "соединение"],
+    ["авария", "происшествие", "поломка"],
+    ["ПК", "АРМ"],
+    ["карточки"]
 ]
 
 # All displayable names for regions.
 region_names = []
 
 def set_region_names():
+
     for region in regions:
 
         region_name_city = region.get("name_city", 0)
@@ -247,7 +250,6 @@ def set_region_names():
         region_name_district = region.get("name_district", 0)
         if region_name_district:
             region_names.append(region_name_district)
-
 
 
 # Dictionary to store the pivot table data.
@@ -265,7 +267,7 @@ def normalize_words(words):
 
 # Count words and delete duplicates.
 def word_count(text):
-    words = re.split(r'\n|\. |, |\.| ', text)
+    words = re.split(r'\\|/|\n|\. |, |\.| ', text)
     cleared_words = [word for word in words if word.isalpha()]
     word_dict = {}
     for clear_word in cleared_words:
@@ -282,7 +284,11 @@ def find_word_number(target_word, text):
 
 def find_keyword(keyword, text):
 
-    nomalized_keyword = normalize_words(keyword)
+    if len(keyword) > 2:
+        nomalized_keyword = normalize_words(keyword)
+    else:
+        nomalized_keyword = keyword
+
     normalized_words = normalize_words(text)
 
     if nomalized_keyword in normalized_words:
@@ -299,7 +305,7 @@ def create_pivot_table():
         
         show_progress(iteration=i, total=len(region_names), suffix=region_name)
 
-        pivot_table_data[region_name] = {keyword: 0 for keyword_set in keywords for keyword in keyword_set}
+        pivot_table_data[region_name] = {", ".join(keyword_set): 0 for keyword_set in keywords}
 
         all_region_messages = ""
         clear_messages = ""
@@ -319,7 +325,7 @@ def create_pivot_table():
             for keyword in keyword_set:
                 position = find_keyword(keyword, clear_messages)
                 if position >= 0:
-                    pivot_table_data[region_name][keyword] += list(word_count_dict.values())[position]
+                    pivot_table_data[region_name][", ".join(keyword_set)] += list(word_count_dict.values())[position]
             
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
@@ -370,7 +376,7 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
         percent = ("{0:.1f}").format(100 * (iteration / float(total)))
         filled_length = int(length * iteration // total)
         bar = fill * filled_length + '-' * (length - filled_length)
-    sys.stdout.write('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix))
+    sys.stdout.write('\r%s |%s| %s%% %s\n' % (prefix, bar, percent, suffix))
     sys.stdout.flush()
 
 # Call the function to execute the code.
