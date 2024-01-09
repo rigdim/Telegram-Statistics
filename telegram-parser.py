@@ -8,16 +8,29 @@ from openpyxl.styles import Border, Side
 
 
 class User:
-    def __init__(self, name, user_id, message):
-        self.name = name
+    def __init__(self, name, user_id, message, date):
+        if name is None:
+            self.name = 'Удалённый пользователь'
+        else:
+            self.name = name
         self.user_id = user_id
         self.messages = message
         self.messages_count = 1
+        self.messages_dates = [(date, 1)]
         self.regions_count = {}  # Nested dictionary to store the region ID and the number of mentions of both as a city and as a district.
         self.region = None
 
     def add_message(self, message):
         self.messages += '\n' + message
+
+    # Counts messages by date.
+    def add_dates(self, date):
+        result = next((messages_date for messages_date in self.messages_dates if messages_date[0] == date), None)
+        if result is None:
+            self.messages_dates.append((date, 1))
+        else:
+            date_index = self.messages_dates.index(result)
+            self.messages_dates[date_index] = (result[0], result[1] + 1)
 
     def add_region(self, region_id, region_type):
         # Add or update the count for the specified region and type.
@@ -44,7 +57,10 @@ class User:
             print("Region not found!")
         else:
             print(f"Region: {self.region}")
+
+        print(f"Dates: {self.messages_dates}")
         print("-" * 10)
+        input()
 
     # Get an appropriate region display name based on 'city' and 'district' number of mentions.
     def set_region(self):
@@ -74,7 +90,7 @@ def get_first_region(dictionary):
     return None, None   
             
 
-def add_user(users_list, name, user_id, message, region_id=None, region_type=None):
+def add_user(users_list, name, user_id, message, date, region_id=None, region_type=None):
     # Check if the user with the given user_id already exists.
     existing_user = next((user for user in users_list if user.user_id == user_id), None)
     if existing_user:
@@ -82,9 +98,10 @@ def add_user(users_list, name, user_id, message, region_id=None, region_type=Non
         existing_user.add_message(message)
         existing_user.add_region(region_id, region_type)
         existing_user.add_messages_count()
+        existing_user.add_dates(date)
     else:
         # User does not exist, create a new user and add to the list.
-        new_user = User(name, user_id, message)
+        new_user = User(name, user_id, message, date)
         if region_id is not None and region_type is not None:
             new_user.add_region(region_id, region_type)
         users_list.append(new_user)
@@ -99,7 +116,7 @@ regions = [
     { 'match': [ 'Братск' ], 'name_city': 'Братск', 'name_district': 'Братский район' },
     { 'match': [ 'Усть-Илимск' ], 'name_city': 'Усть-Илимск', 'name_district': 'Усть-Илимский район' },
     { 'match': [ 'Усоль' ], 'name_city': 'Усолье-Сибирское', 'name_district': 'Усольский район' },
-    { 'match': [ 'Тайшет' ], 'name_city': 'Тайшет', 'name_district': 'Тайшетский район' },
+    { 'match': [ 'Тайшет' ], 'name_district': 'Тайшетский район' },
     { 'match': [ 'Шелехов' ], 'name_district': 'Шелеховский  район' },
     { 'match': [ 'Черемхов' ], 'name_city': 'Черемхово', 'name_district': 'Черемховский район' },
     { 'match': [ 'Нижнеудинск' ], 'name_district': 'Нижнеудинский район' },
@@ -117,7 +134,7 @@ regions = [
     { 'match': [ 'Аларск', 'Кутулик' ], 'name_district': 'Аларский район' },
     { 'match': [ 'Осинск' ], 'name_district': 'Осинский район' },
     { 'match': [ 'Киренск' ], 'name_district': 'Киренский район' },
-    { 'match': [ 'Свирск' ], 'name_district': 'Свирский район' },
+    { 'match': [ 'Свирск' ], 'name_city': 'Свирск' },
     { 'match': [ 'Качуг' ], 'name_district': 'Качугский район' },
     { 'match': [ 'Казачинско-Ленск' ], 'name_district': 'Казачинско-Ленский район' },
     { 'match': [ 'Нукутск' ], 'name_district': 'Нукутский район' },
@@ -169,7 +186,7 @@ def get_users_data():
         id = message["id"]
         user_name = message["from"]
         user_id = message["from_id"]
-        date = datetime.strptime(message["date"].replace("T", " "), "%Y-%m-%d %H:%M:%S")
+        date = datetime.strptime(message["date"].replace("T", " "), "%Y-%m-%d %H:%M:%S").date()
         text = message["text"]
 
         if type(text) == list:
@@ -183,7 +200,7 @@ def get_users_data():
 
         # Create user with region that was founded or update already existed.
         region_id, region_type = find_region_mention(text)
-        add_user(users_list, user_name, user_id, text, region_id, region_type)
+        add_user(users_list, user_name, user_id, text, date, region_id, region_type)
     
     for user in users_list:
         user.set_region()
