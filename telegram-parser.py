@@ -369,6 +369,8 @@ def set_autowidth(worksheet):
         worksheet.column_dimensions[get_column_letter(index)].width = adjusted_width
 
 def show_progress(iteration, total, prefix='Прогресс:', suffix='', length=25, fill='█'):
+    if total <= 50:
+        length = total
     if iteration == (total - 1):
         percent = 100.0
         bar = fill * length
@@ -376,12 +378,12 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
         percent = ("{0:.1f}").format(100 * (iteration / float(total)))
         filled_length = int(length * iteration // total)
         bar = fill * filled_length + '-' * (length - filled_length)
-    sys.stdout.write('\r%s |%s| %s%% %s\n' % (prefix, bar, percent, suffix))
+    sys.stdout.write('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix))
     sys.stdout.flush()
 
 # Call the function to execute the code.
 print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
 get_users_data()
 users_to_excel()
-print("\nПОСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
+print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
 create_pivot_table()
