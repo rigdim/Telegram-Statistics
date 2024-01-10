@@ -5,7 +5,7 @@ import sys
 from pymystem3 import Mystem
 from datetime import datetime
 from openpyxl.styles import Border, Side
-
+import xlsxwriter.utility as Utility
 
 class User:
     def __init__(self, name, user_id, message, date):
@@ -60,7 +60,6 @@ class User:
 
         print(f"Dates: {self.messages_dates}")
         print("-" * 10)
-        input()
 
     # Get an appropriate region display name based on 'city' and 'district' number of mentions.
     def set_region(self):
@@ -204,7 +203,7 @@ def get_users_data():
     
     for user in users_list:
         user.set_region()
-        user.display_user_info()
+        # user.display_user_info()
 
 
 def users_to_excel():
@@ -212,36 +211,65 @@ def users_to_excel():
         "ID": [user.user_id for user in users_list],
         "Имя": [user.name for user in users_list],
         "Сообщений": [user.messages_count for user in users_list],
+        "Регион": [user.region for user in users_list]
     }
-
-    # Add a column for the most frequently occurring region for each user.
-    data["Регион"] = [
-        user.region for user in users_list
-    ]
 
     df = pd.DataFrame(data)
 
-    df = df.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
+    # df = df.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
 
     # unique_regions = df["Регион"].unique()
     # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
 
     styled_df = (
         df.style
-        .set_table_styles([{"selector": "", "props": [("border", "1px solid black")]}])  # Add default black borders.
         .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
         .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
         # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
     )
 
-    with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl') as writer:
+    workbook_name = 'Соотнесение пользователей с регионом.xlsx'
+    workbook_path = './docs/' + workbook_name
+    worksheet_name = 'Пользователи и регионы'
+
+    with pd.ExcelWriter(workbook_path, engine='xlsxwriter') as writer:
     
         # Write the DataFrame to the Excel file.
-        styled_df.to_excel(writer, sheet_name='Пользователи и регионы', index=False)
+        styled_df.to_excel(writer, sheet_name=worksheet_name, index=False)
 
-        worksheet = writer.sheets['Пользователи и регионы']
-        add_borders(worksheet)
-        set_autowidth(worksheet)
+        worksheet = writer.book.get_worksheet_by_name(worksheet_name)
+
+        rows = str(len(users_list) + 1)
+
+        border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
+        worksheet.conditional_format('A1:D' + rows, {'type': 'no_blanks', 'format': border_format})
+
+        worksheet.autofit()
+        
+        for row, user in enumerate(users_list):
+            start_year = 2022
+            end_year = 2024
+            if start_year > end_year:
+                print('Начальная дата распределения сообщений более ранняя, чем конечная.')
+            else:
+
+                data = get_date_distribution(user.messages_dates, start_year, end_year)
+                worksheet.write_row(row + 1, 27, data)
+
+                for i in range(end_year - start_year + 1):
+                    worksheet.write(0, i + 4, start_year + i)
+                    target_cell = Utility.xl_rowcol_to_cell(row + 2, i + 4)
+                    rng = Utility.xl_rowcol_to_cell(row + 2, 26 + i * 12) + ':' + Utility.xl_rowcol_to_cell(row + 2, 26 + (i + 1) * 12)
+                    worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'weight': 6, 'max': 5})
+
+
+def get_date_distribution(dates_count, start_year, end_year):
+        date_distribution = []
+        date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
+
+        for date, count in dates_count:
+            date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
+        return date_distribution
 
 
 # Keywords with their variations
@@ -402,5 +430,5 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
 print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
 get_users_data()
 users_to_excel()
-print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
-create_pivot_table()
+# print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
+# create_pivot_table()

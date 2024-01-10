@@ -1,0 +1,62 @@
+Metadata-Version: 2.1
+Name: pysparklines
+Version: 1.4
+Summary: pysparklines is a unicode sparkline generation library.
+Home-page: https://github.com/RedKrieg/pysparklines
+Author: Brandon Whaley
+Author-email: redkrieg@gmail.com
+License: BSD 3-clause
+Platform: any
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: Unix
+Classifier: Operating System :: POSIX
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Topic :: Software Development
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.2
+Description-Content-Type: text/markdown; charset=UTF-8
+License-File: LICENSE
+Provides-Extra: test
+Requires-Dist: pytest ; extra == 'test'
+
+pysparkline
+====
+
+Python 3 clone of [Zach Holman's BASH sparkline project](https://github.com/holman/spark)
+
+Takes series data via stdin, command line, or API and prints a sparkline representation.
+
+Usage:
+
+- $ `sparkline 4 3 2 1`
+```
+█▆▃▁
+```
+- $ `echo "1.0 1.0 2.0 3.0 5.0 8.0 13.0" | sparkline`
+```
+▁▁▂▂▃▅█
+```
+- $ `seq 20 | sort -R | sparkline -r2`
+```
+▃▁ █▂    ▂▆▅  ▄▇▆   
+██▃██▅▇▄▁███▃▇███▂█▆
+```
+- $ `python3 -c "import sparkline; print(sparkline.sparkify([1.0, 2.0, 3.0, 4.0]))"`
+```
+▁▃▆█
+```
+- $ `python3 -c "import math, sparkline; print(sparkline.sparkify([math.cos(n/10.0) for n in range(-50, 50, 2)], rows=4))"`
+```
+                    ▁▃▅▇███▇▅▃▁                   
+▅▂                ▃▆███████████▆▃                ▂
+██▇▄▁          ▂▅█████████████████▅▂          ▁▄▇█
+█████▆▄▃▁▁▁▂▃▅▇█████████████████████▇▅▃▂▁▁▁▃▄▆████
+```
+
+
