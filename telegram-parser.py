@@ -203,7 +203,7 @@ def get_users_data():
     
     for user in users_list:
         user.set_region()
-        # user.display_user_info()
+        user.display_user_info()
 
 
 def highlight_cells(val):
@@ -273,8 +273,6 @@ def users_to_excel():
         
         # Inserte messages count by date on sheet and create sparklines
         for row, user in enumerate(sorted_users_list):
-            print(f"{user.name} > {user.region}, {user.messages_count}")
-
             if start_year > end_year:
                 print('Начальная дата распределения сообщений более ранняя, чем конечная.')
             else:
@@ -423,7 +421,7 @@ def create_pivot_table():
             
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
-    with pd.ExcelWriter('./docs/Соотнесение пользователей с регионом.xlsx', engine='openpyxl', mode='a') as writer:
+    with pd.ExcelWriter('./docs/Проблемы.xlsx', engine='openpyxl', mode='a') as writer:
         pivot_table_df.to_excel(writer, sheet_name='Статистика по проблемам', index=True)
 
         worksheet = writer.sheets['Статистика по проблемам']
@@ -479,5 +477,5 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
 print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
 get_users_data()
 users_to_excel()
-# print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
-# create_pivot_table()
+print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
+create_pivot_table()
