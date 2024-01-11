@@ -3,14 +3,14 @@ import pandas as pd
 import re
 import sys
 from pymystem3 import Mystem
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl.styles import Border, Side
 import xlsxwriter.utility as Utility
 
 class User:
     def __init__(self, name, user_id, message, date):
         if name is None:
-            self.name = 'Удалённый пользователь'
+            self.name = 'Удаленный пользователь'
         else:
             self.name = name
         self.user_id = user_id
@@ -206,12 +206,23 @@ def get_users_data():
         # user.display_user_info()
 
 
+def highlight_cells(val):
+    if val == "Удаленный пользователь":
+        return 'background-color: #EE5555'
+    else:
+        return ''
+
 def users_to_excel():
+    now = datetime.now()
+
     data = {
         "ID": [user.user_id for user in users_list],
         "Имя": [user.name for user in users_list],
         "Сообщений": [user.messages_count for user in users_list],
-        "Регион": [user.region for user in users_list]
+        "Регион": [user.region for user in users_list],
+        "Актив 14 дн.": [get_last_dates_count(user.messages_dates, 14) for user in users_list],
+        "Актив 30 дн.": [get_last_dates_count(user.messages_dates, 30) for user in users_list],
+        "Актив 90 дн.": [get_last_dates_count(user.messages_dates, 90) for user in users_list],
     }
 
     df = pd.DataFrame(data)
@@ -220,11 +231,12 @@ def users_to_excel():
 
     # unique_regions = df["Регион"].unique()
     # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
-
+    
     styled_df = (
         df.style
         .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
         .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
+        .map(highlight_cells)
         # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
     )
 
@@ -239,37 +251,62 @@ def users_to_excel():
 
         worksheet = writer.book.get_worksheet_by_name(worksheet_name)
 
-        rows = str(len(users_list) + 1)
+        rows = len(users_list)
 
+        # Using conditional formation for proper work.
         border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
-        worksheet.conditional_format('A1:D' + rows, {'type': 'no_blanks', 'format': border_format})
+        worksheet.conditional_format('A1:' + Utility.xl_rowcol_to_cell(rows, 9), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
 
         worksheet.autofit()
+
+        start_year = 2022
+        end_year = 2024
         
+        # Inserte messages count by date on sheet and create sparklines
         for row, user in enumerate(users_list):
-            start_year = 2022
-            end_year = 2024
+
             if start_year > end_year:
                 print('Начальная дата распределения сообщений более ранняя, чем конечная.')
             else:
 
+                # Distribute dates by month and years and write them down in a list.
                 data = get_date_distribution(user.messages_dates, start_year, end_year)
-                worksheet.write_row(row + 1, 27, data)
+                worksheet.write_row(row + 1, 27, data, )
 
                 for i in range(end_year - start_year + 1):
-                    worksheet.write(0, i + 4, start_year + i)
-                    target_cell = Utility.xl_rowcol_to_cell(row + 2, i + 4)
-                    rng = Utility.xl_rowcol_to_cell(row + 2, 26 + i * 12) + ':' + Utility.xl_rowcol_to_cell(row + 2, 26 + (i + 1) * 12)
-                    worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'weight': 6, 'max': 5})
+
+                    worksheet.write(0, i + 7, start_year + i) # Header.
+
+                    target_cell = Utility.xl_rowcol_to_cell(row + 2, i + 7) # Where are sparklines located.
+
+                    rng = Utility.xl_rowcol_to_cell(row + 2, 27 + i * 12) + ':' + Utility.xl_rowcol_to_cell(row + 2, 27 + (i + 1) * 12) # Range of cells with messages count.
+
+                    worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'weight': 6, 'max': 10}) # Adds sparkline. Defines type, width and max value.
 
 
 def get_date_distribution(dates_count, start_year, end_year):
+        
+        # Create array with years * 12 cells.
         date_distribution = []
         date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
 
+        # Counts messages by each month and year and put it in array.
         for date, count in dates_count:
-            date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
+            if date.year >= start_year:
+                date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
         return date_distribution
+
+
+def get_last_dates_count(dates_count, last_days):
+    messages_count = 0
+    for date, count in reversed(dates_count):
+        if date < (datetime.now() - timedelta(days = last_days)).date():
+            break
+        messages_count += count
+    if messages_count == 0:
+        return ""
+    else:
+        return messages_count
 
 
 # Keywords with their variations
@@ -280,6 +317,7 @@ keywords = [
     ["ПК", "АРМ"],
     ["карточки"]
 ]
+
 
 # All displayable names for regions.
 region_names = []
@@ -301,6 +339,7 @@ def set_region_names():
 pivot_table_data = {}
 
 mystem = Mystem()
+
 
 # Normalize keywords using pymystem3
 def normalize_words(words):
