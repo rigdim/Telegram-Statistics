@@ -212,6 +212,12 @@ def highlight_cells(val):
     else:
         return ''
 
+
+# Define a custom sorting key function. Keys are similar to pandas DataFrame sorting.
+def custom_sort(user):
+     return (user.region is None, user.region, -user.messages_count)
+
+
 def users_to_excel():
     now = datetime.now()
 
@@ -227,7 +233,7 @@ def users_to_excel():
 
     df = pd.DataFrame(data)
 
-    # df = df.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
+    df = df.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
 
     # unique_regions = df["Регион"].unique()
     # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
@@ -245,6 +251,9 @@ def users_to_excel():
     worksheet_name = 'Пользователи и регионы'
 
     with pd.ExcelWriter(workbook_path, engine='xlsxwriter') as writer:
+
+        # Sort user_list to sort sparklines and other data on sheet.
+        sorted_users_list = sorted(users_list, key=custom_sort)
     
         # Write the DataFrame to the Excel file.
         styled_df.to_excel(writer, sheet_name=worksheet_name, index=False)
@@ -260,10 +269,11 @@ def users_to_excel():
         worksheet.autofit()
 
         start_year = 2022
-        end_year = 2024
+        end_year = datetime.now().year
         
         # Inserte messages count by date on sheet and create sparklines
-        for row, user in enumerate(users_list):
+        for row, user in enumerate(sorted_users_list):
+            print(f"{user.name} > {user.region}, {user.messages_count}")
 
             if start_year > end_year:
                 print('Начальная дата распределения сообщений более ранняя, чем конечная.')
@@ -277,9 +287,9 @@ def users_to_excel():
 
                     worksheet.write(0, i + 7, start_year + i) # Header.
 
-                    target_cell = Utility.xl_rowcol_to_cell(row + 2, i + 7) # Where are sparklines located.
+                    target_cell = Utility.xl_rowcol_to_cell(row + 1, i + 7) # Where are sparklines located.
 
-                    rng = Utility.xl_rowcol_to_cell(row + 2, 27 + i * 12) + ':' + Utility.xl_rowcol_to_cell(row + 2, 27 + (i + 1) * 12) # Range of cells with messages count.
+                    rng = Utility.xl_rowcol_to_cell(row + 1, 27 + i * 12) + ':' + Utility.xl_rowcol_to_cell(row + 1, 27 + (i + 1) * 12 - 1) # Range of cells with messages count.
 
                     worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'weight': 6, 'max': 10}) # Adds sparkline. Defines type, width and max value.
 
