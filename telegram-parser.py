@@ -262,7 +262,7 @@ def users_to_excel():
 
         rows = len(users_list)
 
-        # Using conditional formation for proper work.
+        # Using conditional formation for proper borders.
         border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
         worksheet.conditional_format('A1:' + Utility.xl_rowcol_to_cell(rows, 9), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
 
@@ -271,7 +271,7 @@ def users_to_excel():
         start_year = 2022
         end_year = datetime.now().year
         
-        # Inserte messages count by date on sheet and create sparklines
+        # Inserte messages count by date on sheet and create sparklines.
         for row, user in enumerate(sorted_users_list):
             if start_year > end_year:
                 print('Начальная дата распределения сообщений более ранняя, чем конечная.')
@@ -317,7 +317,7 @@ def get_last_dates_count(dates_count, last_days):
         return messages_count
 
 
-# Keywords with their variations
+# Keywords with their variations.
 keywords = [
     ["электроэнергия", "электричество", "свет", "ээ", "эл", "э"],
     ["сеть", "связь", "соединение"],
@@ -349,13 +349,14 @@ pivot_table_data = {}
 mystem = Mystem()
 
 
-# Normalize keywords using pymystem3
+# Normalize keywords using pymystem3.
 def normalize_words(words):
     lemmas = mystem.lemmatize(words.lower())
     lemmatized_words = [word for word in lemmas if word.isalpha()]
     if len(lemmatized_words) == 1:
         return lemmatized_words[0]
     return lemmatized_words
+
 
 # Count words and delete duplicates.
 def word_count(text):
@@ -367,12 +368,14 @@ def word_count(text):
         word_dict[clear_word] = word_dict.get(clear_word, 0) + 1
     return word_dict
 
+
 def find_word_number(target_word, text):
     try:
         word_number = text.index(target_word)
         return word_number
     except ValueError:
         return None
+
 
 def find_keyword(keyword, text):
 
@@ -387,6 +390,7 @@ def find_keyword(keyword, text):
         return find_word_number(nomalized_keyword, normalized_words)
     else:
         return -1
+
 
 def create_pivot_table():
 
@@ -421,7 +425,7 @@ def create_pivot_table():
             
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
-    with pd.ExcelWriter('./docs/Проблемы.xlsx', engine='openpyxl', mode='a') as writer:
+    with pd.ExcelWriter('./docs/Проблемы.xlsx', engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
         pivot_table_df.to_excel(writer, sheet_name='Статистика по проблемам', index=True)
 
         worksheet = writer.sheets['Статистика по проблемам']
@@ -460,6 +464,7 @@ def set_autowidth(worksheet):
             adjusted_width = min_width
         worksheet.column_dimensions[get_column_letter(index)].width = adjusted_width
 
+
 def show_progress(iteration, total, prefix='Прогресс:', suffix='', length=25, fill='█'):
     if total <= 50:
         length = total
@@ -472,6 +477,7 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
         bar = fill * filled_length + '-' * (length - filled_length)
     sys.stdout.write('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix))
     sys.stdout.flush()
+
 
 # Call the function to execute the code.
 print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
