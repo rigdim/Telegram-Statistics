@@ -8,17 +8,22 @@ from openpyxl.styles import Border, Side
 import xlsxwriter.utility as Utility
 
 class User:
-    def __init__(self, name, user_id, message, date):
+    def __init__(self, name, id, message, date):
         if name is None:
             self.name = 'Удаленный пользователь'
         else:
             self.name = name
-        self.user_id = user_id
+        self.id = id
         self.messages = message
-        self.messages_count = 1
-        self.messages_dates = [(date, 1)]
+        if message:
+            self.messages_count = 1
+            self.messages_dates = [(date, 1)]
+        else:
+            self.messages_count = 0
+            self.messages_dates = []
         self.regions_count = {}  # Nested dictionary to store the region ID and the number of mentions of both as a city and as a district.
         self.region = None
+        self.membership = "Нет"
 
     def add_message(self, message):
         self.messages += '\n' + message
@@ -44,7 +49,7 @@ class User:
 
     def display_user_info(self):
         print(f"Name: {self.name}")
-        print(f"ID: {self.user_id}")
+        print(f"ID: {self.id}")
         print(f"Message Count: {self.messages_count}")
 
         # Sort dictionary descending.
@@ -59,26 +64,29 @@ class User:
             print(f"Region: {self.region}")
 
         print(f"Dates: {self.messages_dates}")
+        print(f"Membership: {self.membership}")
         print("-" * 10)
 
     # Get an appropriate region display name based on 'city' and 'district' number of mentions.
     def set_region(self):
-        first_region, mentions = get_first_region(sort_dict(self.regions_count))
+        if self.regions_count is not None:
+            first_region, mentions = get_first_region(sort_dict(self.regions_count))
 
-        if first_region is not None:
-            city_count = mentions.get("city", 0)
-            district_count = mentions.get("district", 0)
-            if (city_count > district_count) and ('name_city' in regions[first_region]):
-                self.region = regions[first_region]['name_city']
-            elif ('name_district' in regions[first_region]):
-                self.region = regions[first_region]['name_district']
-            else:
-                self.region = None
+            if first_region is not None:
+                city_count = mentions.get("city", 0)
+                district_count = mentions.get("district", 0)
+                if (city_count > district_count) and ('name_city' in regions[first_region]):
+                    self.region = regions[first_region]['name_city']
+                elif ('name_district' in regions[first_region]):
+                    self.region = regions[first_region]['name_district']
+                else:
+                    self.region = None
         
         
 # Sort regions by sum of its mentions as a city and as a district.
 def sort_dict(dictionary):
-     return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
+     if dictionary is not None:
+        return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
 
 
 def get_first_region(dictionary):
@@ -89,25 +97,31 @@ def get_first_region(dictionary):
     return None, None   
             
 
-def add_user(users_list, name, user_id, message, date, region_id=None, region_type=None):
-    # Check if the user with the given user_id already exists.
-    existing_user = next((user for user in users_list if user.user_id == user_id), None)
+def add_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = "Нет"):
+    # Check if the user with the given id already exists.
+    existing_user = next((user for user in users_list if user.id == id), None)
     if existing_user:
         # User already exists, update the existing user.
         existing_user.add_message(message)
         existing_user.add_region(region_id, region_type)
         existing_user.add_messages_count()
         existing_user.add_dates(date)
+        existing_user.membership = membership
     else:
         # User does not exist, create a new user and add to the list.
-        new_user = User(name, user_id, message, date)
+        new_user = User(name, id, message, date)
         if region_id is not None and region_type is not None:
             new_user.add_region(region_id, region_type)
+        new_user.membership = membership
         users_list.append(new_user)
+
+def get_user(id):
+    for user in users_list:
+        if id in user.id:
+            return user
 
 
 users_list = []
-
 
 regions = [
     { 'match': [ 'Иркутск' ], 'name_city': 'Иркутск', 'name_district': 'Иркутский район' },
@@ -172,45 +186,78 @@ def find_region_mention(text):
                     return index, "city"
     return None, None
 
+# Get .json file data or get None.
+def open_file(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        print(f"Файл {file_path} не найден.")
+        return None
+    return data
 
-# Load .json file and get users data from it.
 def get_users_data():
-    with open('./docs/result.json', 'r', encoding='utf-8') as file:
-        data = json.load(file)
+    export_file_path = './docs/result.json'
+    data = open_file(export_file_path)
 
-    for message in data["messages"]:
-        if message["type"] != "message":
-            continue
+    # Get data from messages export.
+    if data is not None:
+        for message in data["messages"]:
+            if message["type"] != "message":
+                continue
 
-        id = message["id"]
-        user_name = message["from"]
-        user_id = message["from_id"]
-        date = datetime.strptime(message["date"].replace("T", " "), "%Y-%m-%d %H:%M:%S").date()
-        text = message["text"]
+            id = message["id"]
+            user_name = message["from"]
+            id = message["from_id"]
+            date = datetime.strptime(message["date"].replace("T", " "), "%Y-%m-%d %H:%M:%S").date()
+            text = message["text"]
 
-        if type(text) == list:
-            txt_content = ""
-            for part in text:
-                if type(part) == str:
-                    txt_content += part
-            text = txt_content
+            if type(text) == list:
+                txt_content = ""
+                for part in text:
+                    if type(part) == str:
+                        txt_content += part
+                text = txt_content
 
-        text = text.replace("\n", " ")
+            text = text.replace("\n", " ")
 
-        # Create user with region that was founded or update already existed.
-        region_id, region_type = find_region_mention(text)
-        add_user(users_list, user_name, user_id, text, date, region_id, region_type)
-    
+            # Create user with region that was founded or update already existed.
+            region_id, region_type = find_region_mention(text)
+            add_user(users_list, user_name, id, text, date, region_id, region_type)
+
+    members_file_path = './docs/members.json'
+    members = open_file(members_file_path)
+
+    # Check users from messages are still members in chat.
+    if members is not None:
+        for member in members:
+            user = get_user(member["id"])
+            if user:
+                user.membership = 'Да'
+            else:
+                add_user(users_list, member["name"], member["id"], message = None, date = None, membership="Да")
+
     for user in users_list:
-        user.set_region()
-        user.display_user_info()
+            user.set_region()
+            user.display_user_info()
 
 
-def highlight_cells(val):
-    if val == "Удаленный пользователь":
-        return 'background-color: #EE5555'
-    else:
-        return ''
+# Define rules to highlight cells.
+highlight_values = [
+    {'value': 'Удаленный пользователь', 'color': 'background-color: #DD8888', 'entire_row': True},
+    {'value': 'Нет', 'color': 'background-color: #DD3333'},
+]
+
+def highlight_by_value(row):
+    for highlight in highlight_values:
+        for col, val in row.items():
+            if val == highlight['value']:
+                if highlight.get('entire_row', False):
+                    return [highlight['color'] for _ in row.index]
+                else:
+                    return [highlight['color'] if v == val else '' for v in row]
+    return [''] * len(row.index)
+
 
 
 # Define a custom sorting key function. Keys are similar to pandas DataFrame sorting.
@@ -222,13 +269,14 @@ def users_to_excel():
     now = datetime.now()
 
     data = {
-        "ID": [user.user_id for user in users_list],
+        "ID": [user.id for user in users_list],
         "Имя": [user.name for user in users_list],
-        "Сообщений": [user.messages_count for user in users_list],
+        "Сообщений": [user.messages_count if user.messages_count is not None else 0 for user in users_list],
         "Регион": [user.region for user in users_list],
+        "В группе": [user.membership for user in users_list],
         "Актив 14 дн.": [get_last_dates_count(user.messages_dates, 14) for user in users_list],
         "Актив 30 дн.": [get_last_dates_count(user.messages_dates, 30) for user in users_list],
-        "Актив 90 дн.": [get_last_dates_count(user.messages_dates, 90) for user in users_list],
+        "Актив 90 дн.": [get_last_dates_count(user.messages_dates, 90) for user in users_list]
     }
 
     df = pd.DataFrame(data)
@@ -242,7 +290,7 @@ def users_to_excel():
         df.style
         .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
         .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
-        .map(highlight_cells)
+        .apply(highlight_by_value, axis=1)
         # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
     )
 
@@ -261,10 +309,11 @@ def users_to_excel():
         worksheet = writer.book.get_worksheet_by_name(worksheet_name)
 
         rows = len(users_list)
+        start_column_additional_data = 8 # Where to place additional data on sheet.
 
         # Using conditional formation for proper borders.
         border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
-        worksheet.conditional_format('A1:' + Utility.xl_rowcol_to_cell(rows, 9), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
+        worksheet.conditional_format('A1:' + Utility.xl_rowcol_to_cell(rows, start_column_additional_data + 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
 
         worksheet.autofit()
 
@@ -283,9 +332,9 @@ def users_to_excel():
 
                 for i in range(end_year - start_year + 1):
 
-                    worksheet.write(0, i + 7, start_year + i) # Header.
+                    worksheet.write(0, i + start_column_additional_data, start_year + i) # Header.
 
-                    target_cell = Utility.xl_rowcol_to_cell(row + 1, i + 7) # Where are sparklines located.
+                    target_cell = Utility.xl_rowcol_to_cell(row + 1, i + start_column_additional_data) # Where are sparklines located.
 
                     rng = Utility.xl_rowcol_to_cell(row + 1, 27 + i * 12) + ':' + Utility.xl_rowcol_to_cell(row + 1, 27 + (i + 1) * 12 - 1) # Range of cells with messages count.
 
@@ -293,28 +342,30 @@ def users_to_excel():
 
 
 def get_date_distribution(dates_count, start_year, end_year):
-        
-        # Create array with years * 12 cells.
-        date_distribution = []
-        date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
+        if dates_count is not None:
+            
+            # Create array with years * 12 cells.
+            date_distribution = []
+            date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
 
-        # Counts messages by each month and year and put it in array.
-        for date, count in dates_count:
-            if date.year >= start_year:
-                date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
-        return date_distribution
+            # Counts messages by each month and year and put it in array.
+            for date, count in dates_count:
+                if date.year >= start_year:
+                    date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
+            return date_distribution
 
 
 def get_last_dates_count(dates_count, last_days):
-    messages_count = 0
-    for date, count in reversed(dates_count):
-        if date < (datetime.now() - timedelta(days = last_days)).date():
-            break
-        messages_count += count
-    if messages_count == 0:
-        return ""
-    else:
-        return messages_count
+    if dates_count is not None:
+        messages_count = 0
+        for date, count in reversed(dates_count):
+            if date < (datetime.now() - timedelta(days = last_days)).date():
+                break
+            messages_count += count
+        if messages_count == 0:
+            return ""
+        else:
+            return messages_count
 
 
 # Keywords with their variations.
@@ -483,5 +534,5 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
 print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
 get_users_data()
 users_to_excel()
-print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
-create_pivot_table()
+# print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
+# create_pivot_table()
