@@ -23,7 +23,7 @@ class User:
             self.messages_dates = []
         self.regions_count = {}  # Nested dictionary to store the region ID and the number of mentions of both as a city and as a district.
         self.region = None
-        self.membership = "Нет"
+        self.membership = None
 
     def add_message(self, message):
         self.messages += '\n' + message
@@ -97,7 +97,7 @@ def get_first_region(dictionary):
     return None, None   
             
 
-def add_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = "Нет"):
+def add_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = None):
     # Check if the user with the given id already exists.
     existing_user = next((user for user in users_list if user.id == id), None)
     if existing_user:
@@ -196,6 +196,7 @@ def open_file(file_path):
         return None
     return data
 
+
 def get_users_data():
     export_file_path = './docs/result.json'
     data = open_file(export_file_path)
@@ -236,6 +237,10 @@ def get_users_data():
                 user.membership = 'Да'
             else:
                 add_user(users_list, member["name"], member["id"], message = None, date = None, membership="Да")
+
+        for user in users_list:
+            if user.membership is None:
+                user.membership = "Нет"
 
     for user in users_list:
             user.set_region()
