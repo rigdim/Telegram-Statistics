@@ -2,18 +2,20 @@ import json
 import pandas as pd
 import re
 import sys
+import calendar
+import numpy as np
 from pymystem3 import Mystem
 from datetime import datetime, timedelta
 from openpyxl.styles import Border, Side
 import xlsxwriter.utility as Utility
 
 class User:
-    def __init__(self, name, id, message, date):
+    def __init__(self, name, user_id, message, date):
         if name is None:
             self.name = 'Удаленный пользователь'
         else:
             self.name = name
-        self.id = id
+        self.user_id = user_id
         self.messages = message
         if message:
             self.messages_count = 1
@@ -49,7 +51,7 @@ class User:
 
     def display_user_info(self):
         print(f"Name: {self.name}")
-        print(f"ID: {self.id}")
+        print(f"ID: {self.user_id}")
         print(f"Message Count: {self.messages_count}")
 
         # Sort dictionary descending.
@@ -97,9 +99,9 @@ def get_first_region(dictionary):
     return None, None   
             
 
-def add_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = None):
-    # Check if the user with the given id already exists.
-    existing_user = next((user for user in users_list if user.id == id), None)
+def add_user(users_list, name, user_id, message = None, date = None, region_id = None, region_type = None, membership = None):
+    # Check if the user with the given user_id already exists.
+    existing_user = next((user for user in users_list if user.user_id == user_id), None)
     if existing_user:
         # User already exists, update the existing user.
         existing_user.add_message(message)
@@ -109,15 +111,15 @@ def add_user(users_list, name, id, message = None, date = None, region_id = None
         existing_user.membership = membership
     else:
         # User does not exist, create a new user and add to the list.
-        new_user = User(name, id, message, date)
+        new_user = User(name, user_id, message, date)
         if region_id is not None and region_type is not None:
             new_user.add_region(region_id, region_type)
         new_user.membership = membership
         users_list.append(new_user)
 
-def get_user(id):
+def get_user(user_id):
     for user in users_list:
-        if id in user.id:
+        if user_id in user.user_id:
             return user
 
 
@@ -187,7 +189,7 @@ def find_region_mention(text):
     return None, None
 
 # Get .json file data or get None.
-def open_file(file_path):
+def open_json(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             data = json.load(file)
@@ -199,7 +201,7 @@ def open_file(file_path):
 
 def get_users_data():
     export_file_path = './docs/result.json'
-    data = open_file(export_file_path)
+    data = open_json(export_file_path)
 
     # Get data from messages export.
     if data is not None:
@@ -207,9 +209,9 @@ def get_users_data():
             if message["type"] != "message":
                 continue
 
-            id = message["id"]
+            message_id = message["id"]
+            user_id = message["from_id"]
             user_name = message["from"]
-            id = message["from_id"]
             date = datetime.strptime(message["date"].replace("T", " "), "%Y-%m-%d %H:%M:%S").date()
             text = message["text"]
 
@@ -224,12 +226,12 @@ def get_users_data():
 
             # Create user with region that was founded or update already existed.
             region_id, region_type = find_region_mention(text)
-            add_user(users_list, user_name, id, text, date, region_id, region_type)
+            add_user(users_list, user_name, user_id, text, date, region_id, region_type)
 
     members_file_path = './docs/members.json'
-    members = open_file(members_file_path)
+    members = open_json(members_file_path)
 
-    # Check users from messages are still members in chat.
+    # Check that users from messages are still members in chat.
     if members is not None:
         for member in members:
             user = get_user(member["id"])
@@ -274,7 +276,7 @@ def users_to_excel():
     now = datetime.now()
 
     data = {
-        "ID": [user.id for user in users_list],
+        "ID": [user.user_id for user in users_list],
         "Имя": [user.name for user in users_list],
         "Сообщений": [user.messages_count if user.messages_count is not None else 0 for user in users_list],
         "Регион": [user.region for user in users_list],
@@ -290,60 +292,70 @@ def users_to_excel():
 
     # unique_regions = df["Регион"].unique()
     # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
-    
-    styled_df = (
-        df.style
-        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
-        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
-        .apply(highlight_by_value, axis=1)
-        # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
-    )
 
     workbook_name = 'Соотнесение пользователей с регионом.xlsx'
     workbook_path = './docs/' + workbook_name
     worksheet_name = 'Пользователи и регионы'
 
     with pd.ExcelWriter(workbook_path, engine='xlsxwriter') as writer:
-
-        # Sort user_list to sort sparklines and other data on sheet.
-        sorted_users_list = sorted(users_list, key=custom_sort)
     
-        # Write the DataFrame to the Excel file.
-        styled_df.to_excel(writer, sheet_name=worksheet_name, index=False)
-
-        worksheet = writer.book.get_worksheet_by_name(worksheet_name)
-
-        rows = len(users_list)
         start_column_additional_data = 8 # Where to place additional data on sheet.
-
-        # Using conditional formation for proper borders.
-        border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
-        worksheet.conditional_format('A1:' + Utility.xl_rowcol_to_cell(rows, start_column_additional_data + 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
-
-        worksheet.autofit()
 
         start_year = 2022
         end_year = datetime.now().year
         
-        # Inserte messages count by date on sheet and create sparklines.
-        for row, user in enumerate(sorted_users_list):
-            if start_year > end_year:
-                print('Начальная дата распределения сообщений более ранняя, чем конечная.')
-            else:
+        if start_year > end_year:
+                print('Начальная дата распределения сообщений более поздняя, чем конечная.')
+        else:
+            # Creating temporary data for user and dates array.
+            df['user'] = df['ID'].apply(get_user)
+            df['date_distribution'] = df.apply(lambda row: get_date_distribution(row['user'].messages_dates, start_year, end_year), axis=1)
 
-                # Distribute dates by month and years and write them down in a list.
-                data = get_date_distribution(user.messages_dates, start_year, end_year)
-                worksheet.write_row(row + 1, 27, data, )
+            # Create and rename index for DataFrame with date distribution.
+            date_df = pd.DataFrame(df['date_distribution'].tolist(), index=df.index)
+            date_df.columns = [f'{calendar.month_abbr[month + 1]} {year}' for year in range(start_year, end_year + 1) for month in range(12)]
 
-                for i in range(end_year - start_year + 1):
+            # Concat date distribution with other data.
+            df = pd.concat([df, date_df], axis=1)
 
-                    worksheet.write(0, i + start_column_additional_data, start_year + i) # Header.
+            # Delete temporary data.
+            df = df.drop(['user', 'date_distribution'], axis=1)
 
-                    target_cell = Utility.xl_rowcol_to_cell(row + 1, i + start_column_additional_data) # Where are sparklines located.
+            # Insert columns for sparklines.
+            df.insert(8, '', value=np.nan)
+            for year in reversed(range(start_year, end_year + 1)):
+                df.insert(8, year, value=np.nan)
 
-                    rng = Utility.xl_rowcol_to_cell(row + 1, 27 + i * 12) + ':' + Utility.xl_rowcol_to_cell(row + 1, 27 + (i + 1) * 12 - 1) # Range of cells with messages count.
 
-                    worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'weight': 6, 'max': 10}) # Adds sparkline. Defines type, width and max value.
+                # for i in range(end_year - start_year + 1):
+
+                #     target_cell = get_cell_address(row + 1, i + start_column_additional_data) # Where are sparklines located.
+
+                #     rng = get_cell_address(row + 1, 27 + i * 12) + ':' + get_cell_address(row + 1, 27 + (i + 1) * 12 - 1) # Range of cells with messages count.
+
+                #     worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
+
+        styled_df = (
+            df.style
+            .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
+            .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
+            .apply(highlight_by_value, axis=1)
+            # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
+        )
+
+        styled_df.to_excel(writer, worksheet_name, index=False) 
+
+        worksheet = writer.book.get_worksheet_by_name(worksheet_name)
+        
+        # Using conditional formation for proper borders.
+        border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
+        worksheet.conditional_format('A1:' + get_cell_address(df.shape[0], start_column_additional_data + 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
+
+        worksheet.autofit()
+
+
+def get_cell_address(row, col):
+    return Utility.xl_rowcol_to_cell(row, col)
 
 
 def get_date_distribution(dates_count, start_year, end_year):
@@ -375,7 +387,7 @@ def get_last_dates_count(dates_count, last_days):
 
 # Keywords with their variations.
 keywords = [
-    ["электроэнергия", "электричество", "свет", "ээ", "эл", "э"],
+    ["электроэнергия", "электричество", "свет", "ээ", "эл", "э", "отключение"],
     ["сеть", "связь", "соединение"],
     ["авария", "происшествие", "поломка"],
     ["ПК", "АРМ"],
@@ -490,11 +502,6 @@ def create_pivot_table():
         set_autowidth(worksheet)
 
 
-def get_column_letter(index):
-    letter_code = ord('A') + index
-    return chr(letter_code)
-
-
 def add_borders(worksheet):
     for row in worksheet.rows:
         for cell in row:
@@ -502,6 +509,10 @@ def add_borders(worksheet):
                 right=Side(style='thin'),
                 top=Side(style='thin'),
                 bottom=Side(style='thin'))
+
+
+def get_column_letter(col):
+    return Utility.xl_col_to_name(col)
 
 
 def set_autowidth(worksheet):
