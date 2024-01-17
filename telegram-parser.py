@@ -82,23 +82,8 @@ class User:
                 elif ('name_district' in regions[first_region]):
                     self.region = regions[first_region]['name_district']
                 else:
-                    self.region = None
-        
-        
-# Sort regions by sum of its mentions as a city and as a district.
-def sort_dict(dictionary):
-     if dictionary is not None:
-        return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
-
-
-def get_first_region(dictionary):
-    if dictionary is not None:
-        for key, value in dictionary.items():
-            if key is not None:
-                return key, value
-    return None, None   
+                    self.region = None 
             
-
 def add_user(users_list, name, user_id, message = None, date = None, region_id = None, region_type = None, membership = None):
     # Check if the user with the given user_id already exists.
     existing_user = next((user for user in users_list if user.user_id == user_id), None)
@@ -122,8 +107,24 @@ def get_user(user_id):
         if user_id in user.user_id:
             return user
 
-
 users_list = []
+
+
+# Sort regions by sum of its mentions as a city and as a district.
+def sort_dict(dictionary):
+     if dictionary is not None:
+        return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
+
+
+def get_first_region(dictionary):
+    if dictionary is not None:
+        for key, value in dictionary.items():
+            if key is not None:
+                return key, value
+    return None, None  
+
+
+
 
 regions = [
     { 'match': [ 'Иркутск' ], 'name_city': 'Иркутск', 'name_district': 'Иркутский район' },
@@ -301,6 +302,7 @@ def users_to_excel():
     
         start_column_additional_data = 8 # Where to place additional data on sheet.
 
+        # TODO: Change start and end dates with the oldest and the newest message date.
         start_year = 2022
         end_year = datetime.now().year
         
@@ -322,18 +324,9 @@ def users_to_excel():
             df = df.drop(['user', 'date_distribution'], axis=1)
 
             # Insert columns for sparklines.
-            df.insert(8, '', value=np.nan)
+            df.insert(start_column_additional_data, '', value=np.nan)
             for year in reversed(range(start_year, end_year + 1)):
-                df.insert(8, year, value=np.nan)
-
-
-                # for i in range(end_year - start_year + 1):
-
-                #     target_cell = get_cell_address(row + 1, i + start_column_additional_data) # Where are sparklines located.
-
-                #     rng = get_cell_address(row + 1, 27 + i * 12) + ':' + get_cell_address(row + 1, 27 + (i + 1) * 12 - 1) # Range of cells with messages count.
-
-                #     worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
+                df.insert(start_column_additional_data, year, value=np.nan)
 
         styled_df = (
             df.style
@@ -346,16 +339,26 @@ def users_to_excel():
         styled_df.to_excel(writer, worksheet_name, index=False) 
 
         worksheet = writer.book.get_worksheet_by_name(worksheet_name)
-        
+    
         # Using conditional formation for proper borders.
         border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
-        worksheet.conditional_format('A1:' + get_cell_address(df.shape[0], start_column_additional_data + 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
+        worksheet.conditional_format(get_range_address(0, 0, df.shape[0], start_column_additional_data + 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
 
         worksheet.autofit()
+
+        # Add sparklines for each year.
+        for period in range(end_year - start_year + 1):
+            for row in range(df.shape[0]):
+                target_cell = get_cell_address(row + 1, period + start_column_additional_data) # Where are sparklines located.
+                rng = get_range_address(row + 1, start_column_additional_data + 4 + period * 12, row + 1, start_column_additional_data + 3 + (period + 1) * 12) # Range of cells with messages count.
+                worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
 
 
 def get_cell_address(row, col):
     return Utility.xl_rowcol_to_cell(row, col)
+
+def get_range_address(fitst_row, fitst_col, second_row, second_col):
+    return Utility.xl_range(fitst_row, fitst_col, second_row, second_col)
 
 
 def get_date_distribution(dates_count, start_year, end_year):
