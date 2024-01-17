@@ -10,12 +10,12 @@ from openpyxl.styles import Border, Side
 import xlsxwriter.utility as Utility
 
 class User:
-    def __init__(self, name, user_id, message, date):
+    def __init__(self, id, name, message, date):
+        self.id = id
         if name is None:
             self.name = 'Удаленный пользователь'
         else:
             self.name = name
-        self.user_id = user_id
         self.messages = message
         if message:
             self.messages_count = 1
@@ -49,9 +49,9 @@ class User:
     def add_messages_count(self):
         self.messages_count += 1
 
-    def display_user_info(self):
+    def display_info(self):
         print(f"Name: {self.name}")
-        print(f"ID: {self.user_id}")
+        print(f"ID: {self.id}")
         print(f"Message Count: {self.messages_count}")
 
         # Sort dictionary descending.
@@ -83,10 +83,32 @@ class User:
                     self.region = regions[first_region]['name_district']
                 else:
                     self.region = None 
+
+    def get_last_dates_count(self, last_days):
+        if self.messages_dates is not None:
+            messages_count = 0
+            for date, count in reversed(self.messages_dates):
+                if date < (datetime.now() - timedelta(days = last_days)).date():
+                    break
+                messages_count += count
+            return messages_count
+        
+    def get_date_distribution(self, start_year, end_year):
+        if self.messages_dates is not None:
             
-def add_user(users_list, name, user_id, message = None, date = None, region_id = None, region_type = None, membership = None):
+            # Create array with years * 12 cells.
+            date_distribution = []
+            date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
+
+            # Counts messages by each month and year and put it in array.
+            for date, count in self.messages_dates:
+                if date.year >= start_year:
+                    date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
+            return date_distribution
+            
+def add_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = None):
     # Check if the user with the given user_id already exists.
-    existing_user = next((user for user in users_list if user.user_id == user_id), None)
+    existing_user = next((user for user in users_list if user.id == id), None)
     if existing_user:
         # User already exists, update the existing user.
         existing_user.add_message(message)
@@ -96,17 +118,17 @@ def add_user(users_list, name, user_id, message = None, date = None, region_id =
         existing_user.membership = membership
     else:
         # User does not exist, create a new user and add to the list.
-        new_user = User(name, user_id, message, date)
+        new_user = User(id, name, message, date)
         if region_id is not None and region_type is not None:
             new_user.add_region(region_id, region_type)
         new_user.membership = membership
         users_list.append(new_user)
 
-def get_user(user_id):
+def get_user(id):
     for user in users_list:
-        if user_id in user.user_id:
+        if id in user.id:
             return user
-
+                
 users_list = []
 
 
@@ -124,7 +146,82 @@ def get_first_region(dictionary):
     return None, None  
 
 
+# Define class for region as a group header for several users.
+class Region(User):
+    def __init__(self, name, region_type):
+        self.id = len(regions_list) + 1
+        self.name = name
+        self.region_type = region_type
+        self.membership = "Нет"
+        self.users = []
+        self.users_count = 0
+        regions_list.append(self)
+    
+    def add_user(self, user):
+        self.users.append(user)
+        self.users_count += 1
 
+    def get_messages_count(self):
+        messages_count = 0
+        for user in self.users:
+            messages_count += user.messages_count
+        return messages_count
+    
+    def get_last_dates_count(self, days):
+        messages_count = 0
+        for user in self.users:
+            messages_count += user.get_last_dates_count(days)
+        return messages_count
+
+    def get_date_distribution(self, start_year, end_year):
+        # Create array with years * 12 cells.
+        date_distribution = []
+        date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
+
+        if self.users:
+            # Sum messages of user for each month and year.
+            sum_month = 0
+            for month in range((end_year - start_year + 1) * 12):
+                for user in self.users:
+                    sum_month += user.get_date_distibution
+                date_distribution[month] = sum_month
+        return date_distribution
+
+
+    def set_region(self):
+        return 0
+    
+    def add_message(self, message):
+        return 0
+    
+    def add_dates(self, date):
+        return 0
+
+    def add_region(self, region_id, region_type):
+        return 0
+
+    def display_info(self):
+        print(f"Name: {self.name}")
+        print(f"ID: {self.id}")
+        print(f"Message Count: {self.get_messages_count()}")
+        print(f"Users count: {self.users_count}")
+        print(f"Membership: {self.membership}")
+        print("-" * 10)
+        
+# All displayable regions.
+regions_list = []
+
+def fill_regions_list():
+    for region in regions:
+        name = region.get("name_city", 0)
+        if name:
+            region_type = "Город"
+            Region(name, region_type)
+
+        name = region.get("name_district", 0)
+        if name:
+            region_type = "Район (ГО)"
+            Region(name, region_type)
 
 regions = [
     { 'match': [ 'Иркутск' ], 'name_city': 'Иркутск', 'name_district': 'Иркутский район' },
@@ -163,7 +260,6 @@ regions = [
     { 'match': [ 'Мамско-Чуйск', 'Мама' ], 'name_district': 'Мамско-Чуйский район' },
     { 'match': [ 'Катангск' ], 'name_district': 'Катангский район' }
 ]
-
 
 # Word endings to be recognized as district.
 region_endings = [ 'ий', 'ого', 'ому', 'им', 'ом' ] 
@@ -246,13 +342,26 @@ def get_users_data():
                 user.membership = "Нет"
 
     for user in users_list:
-            user.set_region()
-            user.display_user_info()
+        user.set_region()
+        user.display_info()
 
+    get_regions_data()
+
+
+def get_regions_data():
+
+    fill_regions_list()
+
+    for region in regions_list:
+        for user in users_list:
+            if user.region == region.name:
+                region.add_user(user)
+
+        region.display_info()
 
 # Define rules to highlight cells.
 highlight_values = [
-    {'value': 'Удаленный пользователь', 'color': 'background-color: #DD8888', 'entire_row': True},
+    {'value': 'Удаленный пользователь', 'color': 'background-color: #DD8888', 'entire_row': False},
     {'value': 'Нет', 'color': 'background-color: #DD3333'},
 ]
 
@@ -273,68 +382,91 @@ def custom_sort(user):
      return (user.region is None, user.region, -user.messages_count)
 
 
-def users_to_excel():
-    now = datetime.now()
+def users_to_excel():    
 
-    data = {
-        "ID": [user.user_id for user in users_list],
+    start_column_additional_data = 8 # Where to place additional data on sheet.
+
+    # TODO: Change start and end dates with the oldest and the newest message date.
+    now = datetime.now()
+    start_year = 2022
+    end_year = now.year
+
+    data_users = {
+        "object": [user for user in users_list],
+        "ID": [user.id for user in users_list],
         "Имя": [user.name for user in users_list],
         "Сообщений": [user.messages_count if user.messages_count is not None else 0 for user in users_list],
         "Регион": [user.region for user in users_list],
         "В группе": [user.membership for user in users_list],
-        "Актив 14 дн.": [get_last_dates_count(user.messages_dates, 14) for user in users_list],
-        "Актив 30 дн.": [get_last_dates_count(user.messages_dates, 30) for user in users_list],
-        "Актив 90 дн.": [get_last_dates_count(user.messages_dates, 90) for user in users_list]
+        "Актив 14 дн.": [user.get_last_dates_count(14) if user.get_last_dates_count(14) is not 0 else '' for user in users_list],
+        "Актив 30 дн.": [user.get_last_dates_count(30) if user.get_last_dates_count(30) is not 0 else '' for user in users_list],
+        "Актив 90 дн.": [user.get_last_dates_count(90) if user.get_last_dates_count(90) is not 0 else '' for user in users_list]
     }
 
-    df = pd.DataFrame(data)
+    df_users = pd.DataFrame(data_users)
 
-    df = df.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
+    # Insert messages distribution in DataFrame.
+    if start_year > end_year:
+        print('Начальная дата распределения сообщений более поздняя, чем конечная.')
+    else:
+        df_users['date_distribution'] = df_users.apply(lambda row: row['object'].get_date_distribution(start_year, end_year), axis=1)
 
-    # unique_regions = df["Регион"].unique()
-    # region_colors = {region: f"#{np.random.randint(0x999999, 0xFFFFFF):06x}" for region in unique_regions}
+        # Create and rename index for DataFrame with date distribution.
+        date_df = pd.DataFrame(df_users['date_distribution'].tolist(), index=df_users.index)
+        date_df.columns = [f'{calendar.month_abbr[month + 1]} {year}' for year in range(start_year, end_year + 1) for month in range(12)]
 
-    workbook_name = 'Соотнесение пользователей с регионом.xlsx'
-    workbook_path = './docs/' + workbook_name
-    worksheet_name = 'Пользователи и регионы'
+        # Concat date distribution with other data.
+        df_users = pd.concat([df_users, date_df], axis=1)
 
-    with pd.ExcelWriter(workbook_path, engine='xlsxwriter') as writer:
+        df_users = df_users.drop(['date_distribution', 'object'], axis=1)
+
+        # Insert columns for sparklines.
+        df_users.insert(start_column_additional_data, '', value=np.nan)
+        for year in reversed(range(start_year, end_year + 1)):
+            df_users.insert(start_column_additional_data, year, value=np.nan)
+
+    data_regions = {
+        "object": [region for region in regions_list],
+        "ID": [0 for _ in regions_list],
+        "Имя": [region.name for region in regions_list],
+        "Сообщений": [0 for _ in regions_list],
+        "Регион": [region.name for region in regions_list],
+        "В группе": [region.region_type for region in regions_list],
+        "Актив 14 дн.": [region.get_last_dates_count(14) if region.get_last_dates_count(14) is not 0 else '' for region in regions_list],
+        "Актив 30 дн.": [region.get_last_dates_count(30) if region.get_last_dates_count(30) is not 0 else '' for region in regions_list],
+        "Актив 90 дн.": [region.get_last_dates_count(90) if region.get_last_dates_count(90) is not 0 else '' for region in regions_list]
+    }
     
-        start_column_additional_data = 8 # Where to place additional data on sheet.
+    df_regions = pd.DataFrame(data_regions)
 
-        # TODO: Change start and end dates with the oldest and the newest message date.
-        start_year = 2022
-        end_year = datetime.now().year
-        
-        if start_year > end_year:
-                print('Начальная дата распределения сообщений более поздняя, чем конечная.')
-        else:
-            # Creating temporary data for user and dates array.
-            df['user'] = df['ID'].apply(get_user)
-            df['date_distribution'] = df.apply(lambda row: get_date_distribution(row['user'].messages_dates, start_year, end_year), axis=1)
+    region_messages_sum = df_users.groupby("Регион")["Сообщений"].sum().reset_index()
 
-            # Create and rename index for DataFrame with date distribution.
-            date_df = pd.DataFrame(df['date_distribution'].tolist(), index=df.index)
-            date_df.columns = [f'{calendar.month_abbr[month + 1]} {year}' for year in range(start_year, end_year + 1) for month in range(12)]
+    df_regions = pd.merge(df_regions, region_messages_sum, on="Регион", how="left", suffixes=('', '_sum'))
 
-            # Concat date distribution with other data.
-            df = pd.concat([df, date_df], axis=1)
+    df_regions['Сообщений'] = df_regions['Сообщений_sum'].fillna(df_regions['Сообщений']).astype(int)
 
-            # Delete temporary data.
-            df = df.drop(['user', 'date_distribution'], axis=1)
+    df_regions = df_regions.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
+    df_regions['ID'] = df_regions.reset_index().index + 1
 
-            # Insert columns for sparklines.
-            df.insert(start_column_additional_data, '', value=np.nan)
-            for year in reversed(range(start_year, end_year + 1)):
-                df.insert(start_column_additional_data, year, value=np.nan)
+    df_regions = df_regions.drop(['object', 'Сообщений_sum'], axis=1)
 
-        styled_df = (
+    # Concat, sort DataFrames.
+    df = pd.concat([df_users, df_regions], ignore_index=True)
+    df = df.sort_values(by=["Регион", "Сообщений", "ID"], ascending=[True, False, True])
+
+    styled_df = (
             df.style
             .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
             .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
             .apply(highlight_by_value, axis=1)
             # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
         )
+
+    workbook_name = 'Соотнесение пользователей с регионом.xlsx'
+    workbook_path = './docs/' + workbook_name
+    worksheet_name = 'Пользователи и регионы'
+
+    with pd.ExcelWriter(workbook_path, engine='xlsxwriter') as writer:
 
         styled_df.to_excel(writer, worksheet_name, index=False) 
 
@@ -361,33 +493,6 @@ def get_range_address(fitst_row, fitst_col, second_row, second_col):
     return Utility.xl_range(fitst_row, fitst_col, second_row, second_col)
 
 
-def get_date_distribution(dates_count, start_year, end_year):
-        if dates_count is not None:
-            
-            # Create array with years * 12 cells.
-            date_distribution = []
-            date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
-
-            # Counts messages by each month and year and put it in array.
-            for date, count in dates_count:
-                if date.year >= start_year:
-                    date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
-            return date_distribution
-
-
-def get_last_dates_count(dates_count, last_days):
-    if dates_count is not None:
-        messages_count = 0
-        for date, count in reversed(dates_count):
-            if date < (datetime.now() - timedelta(days = last_days)).date():
-                break
-            messages_count += count
-        if messages_count == 0:
-            return ""
-        else:
-            return messages_count
-
-
 # Keywords with their variations.
 keywords = [
     ["электроэнергия", "электричество", "свет", "ээ", "эл", "э", "отключение"],
@@ -396,22 +501,6 @@ keywords = [
     ["ПК", "АРМ"],
     ["карточки"]
 ]
-
-
-# All displayable names for regions.
-region_names = []
-
-def set_region_names():
-
-    for region in regions:
-
-        region_name_city = region.get("name_city", 0)
-        if region_name_city:
-            region_names.append(region_name_city)
-
-        region_name_district = region.get("name_district", 0)
-        if region_name_district:
-            region_names.append(region_name_district)
 
 
 # Dictionary to store the pivot table data.
@@ -464,8 +553,6 @@ def find_keyword(keyword, text):
 
 
 def create_pivot_table():
-
-    set_region_names()
 
     # Initialize pivot table.
     for i, region_name in enumerate(region_names):
