@@ -348,8 +348,11 @@ def get_regions_data():
 
 # Define rules to highlight cells.
 highlight_values = [
-    {'value': 'Удаленный пользователь', 'color': 'background-color: #DD8888', 'entire_row': False},
     {'value': 'Нет', 'color': 'background-color: #DD3333'},
+    {'value': 'Удаленный пользователь', 'color': 'background-color: #DD8888', 'entire_row': True},
+    {'value': 'Район (ГО)', 'color': 'background-color: #EEEEEE', 'entire_row': True},
+    {'value': 'Город', 'color': 'background-color: #EEEEEE', 'entire_row': True},
+
 ]
 
 def highlight_by_value(row):
@@ -375,7 +378,7 @@ def users_to_excel():
     start_year = 2022
     end_year = now.year
     years = end_year - start_year + 1
-    months_columns = [f'{calendar.month_abbr[month + 1]} {year}' for year in range(start_year, end_year + 1) for month in range(12)]
+    months_columns = [f'{calendar.month_abbr[month + 1]} {year % 100}' for year in range(start_year, end_year + 1) for month in range(12)]
 
     data_users = {
         "object": [user for user in users_list],
@@ -410,7 +413,7 @@ def users_to_excel():
         # Insert columns for sparklines.
         df_users.insert(start_column_additional_data, '', value=np.nan)
         for year in reversed(range(start_year, end_year + 1)):
-            df_users.insert(start_column_additional_data, year, value=np.nan)
+            df_users.insert(start_column_additional_data, str(year) + ' г.', value=np.nan)
 
     data_regions = {
         "object": [region for region in regions_list],
