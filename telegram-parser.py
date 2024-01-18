@@ -69,11 +69,19 @@ class User:
         print(f"Membership: {self.membership}")
         print("-" * 10)
 
+
+    def get_first_region(self, ):
+        if self.regions_count is not None:
+            sorted_regions = sort_dict(self.regions_count)
+            for key, value in sorted_regions.items():
+                if key is not None:
+                    return key, value
+        return None, None
+    
     # Get an appropriate region display name based on 'city' and 'district' number of mentions.
     def set_region(self):
         if self.regions_count is not None:
-            first_region, mentions = get_first_region(sort_dict(self.regions_count))
-
+            first_region, mentions = self.get_first_region()
             if first_region is not None:
                 city_count = mentions.get("city", 0)
                 district_count = mentions.get("district", 0)
@@ -138,14 +146,6 @@ def sort_dict(dictionary):
         return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
 
 
-def get_first_region(dictionary):
-    if dictionary is not None:
-        for key, value in dictionary.items():
-            if key is not None:
-                return key, value
-    return None, None  
-
-
 # Define class for region as a group header for several users.
 class Region():
     def __init__(self, name, region_type):
@@ -192,7 +192,7 @@ class Region():
         print(f"ID: {self.id}")
         print(f"Message Count: {self.get_messages_count()}")
         print(f"Users count: {self.users_count}")
-        print(f"Membership: {self.membership}")
+        print(f"Type: {self.region_type}")
         print("-" * 10)
         
 # All displayable regions.
@@ -363,14 +363,12 @@ def highlight_by_value(row):
     return [''] * len(row.index)
 
 
-
 # Define a custom sorting key function. Keys are similar to pandas DataFrame sorting.
 def custom_sort(user):
      return (user.region is None, user.region, -user.messages_count)
 
 
 def users_to_excel():    
-
 
     # TODO: Change start and end dates with the oldest and the newest message date.
     now = datetime.now()
@@ -556,18 +554,18 @@ def find_keyword(keyword, text):
 def create_pivot_table():
 
     # Initialize pivot table.
-    for i, region_name in enumerate(region_names):
+    for i, region in enumerate(regions_list):
         
-        show_progress(iteration=i, total=len(region_names), suffix=region_name)
+        show_progress(iteration=i, total=len(regions), suffix=region.name)
 
-        pivot_table_data[region_name] = {", ".join(keyword_set): 0 for keyword_set in keywords}
+        pivot_table_data[region.name] = {", ".join(keyword_set): 0 for keyword_set in keywords}
 
         all_region_messages = ""
         clear_messages = ""
 
         # Get all messages for corresponding region.
         for user in users_list:
-            if user.region == region_name:
+            if user.region == region.name:
                 all_region_messages += " " + user.messages
 
         word_count_dict =  word_count(all_region_messages)
@@ -580,7 +578,7 @@ def create_pivot_table():
             for keyword in keyword_set:
                 position = find_keyword(keyword, clear_messages)
                 if position >= 0:
-                    pivot_table_data[region_name][", ".join(keyword_set)] += list(word_count_dict.values())[position]
+                    pivot_table_data[region.name][", ".join(keyword_set)] += list(word_count_dict.values())[position]
             
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
@@ -641,5 +639,5 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
 print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
 get_users_data()
 users_to_excel()
-# print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
-# create_pivot_table()
+print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
+create_pivot_table()
