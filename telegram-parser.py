@@ -147,7 +147,7 @@ def get_first_region(dictionary):
 
 
 # Define class for region as a group header for several users.
-class Region(User):
+class Region():
     def __init__(self, name, region_type):
         self.id = len(regions_list) + 1
         self.name = name
@@ -186,19 +186,6 @@ class Region(User):
                     sum_month += user.get_date_distibution
                 date_distribution[month] = sum_month
         return date_distribution
-
-
-    def set_region(self):
-        return 0
-    
-    def add_message(self, message):
-        return 0
-    
-    def add_dates(self, date):
-        return 0
-
-    def add_region(self, region_id, region_type):
-        return 0
 
     def display_info(self):
         print(f"Name: {self.name}")
@@ -384,12 +371,13 @@ def custom_sort(user):
 
 def users_to_excel():    
 
-    start_column_additional_data = 8 # Where to place additional data on sheet.
 
     # TODO: Change start and end dates with the oldest and the newest message date.
     now = datetime.now()
     start_year = 2022
     end_year = now.year
+    years = end_year - start_year + 1
+    months_columns = [f'{calendar.month_abbr[month + 1]} {year}' for year in range(start_year, end_year + 1) for month in range(12)]
 
     data_users = {
         "object": [user for user in users_list],
@@ -412,13 +400,14 @@ def users_to_excel():
         df_users['date_distribution'] = df_users.apply(lambda row: row['object'].get_date_distribution(start_year, end_year), axis=1)
 
         # Create and rename index for DataFrame with date distribution.
-        date_df = pd.DataFrame(df_users['date_distribution'].tolist(), index=df_users.index)
-        date_df.columns = [f'{calendar.month_abbr[month + 1]} {year}' for year in range(start_year, end_year + 1) for month in range(12)]
+        df_distribution = pd.DataFrame(df_users['date_distribution'].tolist(), index=df_users.index)
+        df_distribution.columns = months_columns
 
         # Concat date distribution with other data.
-        df_users = pd.concat([df_users, date_df], axis=1)
+        df_users = pd.concat([df_users, df_distribution], axis=1)
 
-        df_users = df_users.drop(['date_distribution', 'object'], axis=1)
+        # Where to place additional data on sheet.
+        start_column_additional_data = df_users.shape[1] - years * 12
 
         # Insert columns for sparklines.
         df_users.insert(start_column_additional_data, '', value=np.nan)
@@ -439,28 +428,33 @@ def users_to_excel():
     
     df_regions = pd.DataFrame(data_regions)
 
+    # Find sum of all messages.
     region_messages_sum = df_users.groupby("Регион")["Сообщений"].sum().reset_index()
-
     df_regions = pd.merge(df_regions, region_messages_sum, on="Регион", how="left", suffixes=('', '_sum'))
-
     df_regions['Сообщений'] = df_regions['Сообщений_sum'].fillna(df_regions['Сообщений']).astype(int)
+    df_regions = df_regions.drop(['Сообщений_sum'], axis=1)
+    
+    if start_year <= end_year:
+        # Find sum of messages by months for regions.
+        df_regions_sum = df_users.groupby('Регион')[months_columns].sum().reset_index()
+        df_regions = pd.merge(df_regions, df_regions_sum, how='left', on='Регион')
+        df_users = df_users.drop('date_distribution', axis=1)
 
+    # Sort regions to set indexes.
     df_regions = df_regions.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
     df_regions['ID'] = df_regions.reset_index().index + 1
 
-    df_regions = df_regions.drop(['object', 'Сообщений_sum'], axis=1)
-
-    # Concat, sort DataFrames.
+    # Concat, sort DataFrames, delete temporary columns.
     df = pd.concat([df_users, df_regions], ignore_index=True)
     df = df.sort_values(by=["Регион", "Сообщений", "ID"], ascending=[True, False, True])
+    df = df.drop(['object', 'Регион'], axis=1)
 
     styled_df = (
-            df.style
-            .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
-            .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
-            .apply(highlight_by_value, axis=1)
-            # .apply(lambda row: [f"background-color: {region_colors[row['Регион']]}"] * len(row), axis=1, subset=["Регион"])
-        )
+        df.style
+        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
+        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
+        .apply(highlight_by_value, axis=1)
+    )
 
     workbook_name = 'Соотнесение пользователей с регионом.xlsx'
     workbook_path = './docs/' + workbook_name
@@ -471,19 +465,26 @@ def users_to_excel():
         styled_df.to_excel(writer, worksheet_name, index=False) 
 
         worksheet = writer.book.get_worksheet_by_name(worksheet_name)
-    
+
+        if start_year <= end_year:
+            # Where sparklines start.
+            start_column_additional_data = df.shape[1] - years * 12 - years
+            
+            # Add sparklines for each year.
+            for period in range(years):
+                for row in range(df.shape[0]):
+                    target_cell = get_cell_address(row + 1, period + start_column_additional_data - 1) # Where are sparklines located.
+                    rng = get_range_address(row + 1, start_column_additional_data + years + period * 12, row + 1, start_column_additional_data + years + (period + 1) * 12 - 1) # Range of cells with messages count.
+                    worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
+        else:
+            start_column_additional_data = df.shape[1]
+            years = 1
+        
         # Using conditional formation for proper borders.
         border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
-        worksheet.conditional_format(get_range_address(0, 0, df.shape[0], start_column_additional_data + 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
-
+        worksheet.conditional_format(get_range_address(0, 0, df.shape[0], start_column_additional_data + years - 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
+        
         worksheet.autofit()
-
-        # Add sparklines for each year.
-        for period in range(end_year - start_year + 1):
-            for row in range(df.shape[0]):
-                target_cell = get_cell_address(row + 1, period + start_column_additional_data) # Where are sparklines located.
-                rng = get_range_address(row + 1, start_column_additional_data + 4 + period * 12, row + 1, start_column_additional_data + 3 + (period + 1) * 12) # Range of cells with messages count.
-                worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
 
 
 def get_cell_address(row, col):
