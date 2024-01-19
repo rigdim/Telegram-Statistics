@@ -4,6 +4,7 @@ import re
 import sys
 import calendar
 import numpy as np
+from enum import Enum
 from pymystem3 import Mystem
 from datetime import datetime, timedelta
 from openpyxl.styles import Border, Side
@@ -26,6 +27,7 @@ class User:
         self.regions_count = {}  # Nested dictionary to store the region ID and the number of mentions of both as a city and as a district.
         self.region = None
         self.membership = None
+        self.user_type = None
 
     def add_message(self, message):
         self.messages += '\n' + message
@@ -113,6 +115,15 @@ class User:
                 if date.year >= start_year:
                     date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
             return date_distribution
+        
+    def get_type(self):
+        for group in group_list:
+            if self.name in group.members:
+                self.user_type = group.name
+            if self.user_type is None:
+                self.user_type = UserType.OPERATOR.value
+        return self.user_type
+
             
 def add_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = None):
     # Check if the user with the given user_id already exists.
@@ -146,6 +157,33 @@ def sort_dict(dictionary):
         return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
 
 
+class UserType(Enum):
+    ADMIN = 'Админ'
+    OPERATOR = 'Оператор'
+    BOT = 'Бот'
+
+
+group_list = []
+
+# Class to group users by their properties.
+class Group():
+    def __init__(self, name):
+        self.name = name
+        self.members = []
+        self.members_count = 0
+        group_list.append(self)
+
+    def add_member(self, member):
+        self.members.append(member)
+        self.members_count += 1
+
+admins_group = Group(UserType.ADMIN.value)
+admins_group.members = ['Михаил Хабаров', 'Иван Борисов', 'ООО "СИБ" Иркутск Евгений', '112 Иркутская область']
+
+bots_group = Group(UserType.BOT.value)
+bots_group.members = ['ms.rt.ru', 'Combot', 'ChatKeeperBot']
+
+
 # Define class for region as a group header for several users.
 class Region():
     def __init__(self, name, region_type):
@@ -173,20 +211,6 @@ class Region():
             messages_count += user.get_last_dates_count(days)
         return messages_count
 
-    def get_date_distribution(self, start_year, end_year):
-        # Create array with years * 12 cells.
-        date_distribution = []
-        date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
-
-        if self.users:
-            # Sum messages of user for each month and year.
-            sum_month = 0
-            for month in range((end_year - start_year + 1) * 12):
-                for user in self.users:
-                    sum_month += user.get_date_distibution
-                date_distribution[month] = sum_month
-        return date_distribution
-
     def display_info(self):
         print(f"Name: {self.name}")
         print(f"ID: {self.id}")
@@ -194,6 +218,7 @@ class Region():
         print(f"Users count: {self.users_count}")
         print(f"Type: {self.region_type}")
         print("-" * 10)
+
         
 # All displayable regions.
 regions_list = []
@@ -245,7 +270,8 @@ regions = [
     { 'match': [ 'Жигалов' ], 'name_district': 'Жигаловский район' },
     { 'match': [ 'Балаганск' ], 'name_district': 'Балаганский район' },
     { 'match': [ 'Мамско-Чуйск', 'Мама' ], 'name_district': 'Мамско-Чуйский район' },
-    { 'match': [ 'Катангск' ], 'name_district': 'Катангский район' }
+    { 'match': [ 'Катангск' ], 'name_district': 'Катангский район' },
+    { 'match': [], 'name_district': 'Регион не найден' }
 ]
 
 # Word endings to be recognized as district.
@@ -343,16 +369,19 @@ def get_regions_data():
         for user in users_list:
             if user.region == region.name:
                 region.add_user(user)
+            if user.region is None and region.name == "Регион не найден":
+                region.add_user(user)
 
         region.display_info()
 
 # Define rules to highlight cells.
 highlight_values = [
-    {'value': 'Нет', 'color': 'background-color: #DD3333'},
-    {'value': 'Удаленный пользователь', 'color': 'background-color: #DD8888', 'entire_row': True},
     {'value': 'Район (ГО)', 'color': 'background-color: #EEEEEE', 'entire_row': True},
     {'value': 'Город', 'color': 'background-color: #EEEEEE', 'entire_row': True},
-
+    {'value': 'Админ', 'color': 'color: #666666', 'entire_row': True},
+    {'value': 'Бот', 'color': 'color: #666666', 'entire_row': True},
+    {'value': 'Удаленный пользователь', 'color': 'background-color: #DD8888', 'entire_row': False},
+    {'value': 'Нет', 'color': 'background-color: #DD3333'}
 ]
 
 def highlight_by_value(row):
@@ -364,11 +393,6 @@ def highlight_by_value(row):
                 else:
                     return [highlight['color'] if v == val else '' for v in row]
     return [''] * len(row.index)
-
-
-# Define a custom sorting key function. Keys are similar to pandas DataFrame sorting.
-def custom_sort(user):
-     return (user.region is None, user.region, -user.messages_count)
 
 
 def users_to_excel():    
@@ -385,8 +409,9 @@ def users_to_excel():
         "ID": [user.id for user in users_list],
         "Имя": [user.name for user in users_list],
         "Сообщений": [user.messages_count if user.messages_count is not None else 0 for user in users_list],
-        "Регион": [user.region for user in users_list],
+        "Регион": [user.region if user.region else "Ҏегион не найден" for user in users_list],
         "В группе": [user.membership for user in users_list],
+        "Тип": [user.get_type() for user in users_list],
         "Актив 14 дн.": [user.get_last_dates_count(14) if user.get_last_dates_count(14) is not 0 else '' for user in users_list],
         "Актив 30 дн.": [user.get_last_dates_count(30) if user.get_last_dates_count(30) is not 0 else '' for user in users_list],
         "Актив 90 дн.": [user.get_last_dates_count(90) if user.get_last_dates_count(90) is not 0 else '' for user in users_list]
@@ -417,11 +442,12 @@ def users_to_excel():
 
     data_regions = {
         "object": [region for region in regions_list],
-        "ID": [0 for _ in regions_list],
+        "ID": [None for _ in regions_list],
         "Имя": [region.name for region in regions_list],
         "Сообщений": [0 for _ in regions_list],
-        "Регион": [region.name for region in regions_list],
-        "В группе": [region.region_type for region in regions_list],
+        "Регион": [region.name if region.name != "Регион не найден" else "Ҏегион не найден" for region in regions_list],
+        "В группе": ['Да' if region.users else 'Нет' for region in regions_list],
+        "Тип": [region.region_type for region in regions_list],
         "Актив 14 дн.": [region.get_last_dates_count(14) if region.get_last_dates_count(14) is not 0 else '' for region in regions_list],
         "Актив 30 дн.": [region.get_last_dates_count(30) if region.get_last_dates_count(30) is not 0 else '' for region in regions_list],
         "Актив 90 дн.": [region.get_last_dates_count(90) if region.get_last_dates_count(90) is not 0 else '' for region in regions_list]
@@ -445,10 +471,14 @@ def users_to_excel():
     df_regions = df_regions.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
     df_regions['ID'] = df_regions.reset_index().index + 1
 
-    # Concat, sort DataFrames, delete temporary columns.
     df = pd.concat([df_users, df_regions], ignore_index=True)
-    df = df.sort_values(by=["Регион", "Сообщений", "ID"], ascending=[True, False, True])
-    df = df.drop(['object', 'Регион'], axis=1)
+
+    # Create categories with type value and sort in given order.
+    sorting_order_type = ["Район (ГО)", "Город", "Оператор", "Админ", "Бот"]
+    df['Тип'] = pd.Categorical(df['Тип'], categories=sorting_order_type, ordered=True)
+    df = df.sort_values(by=["Регион", "Тип", "Сообщений", "ID"], ascending=[True, True, False, True])
+
+    df = df.drop(['object', "Регион"], axis=1)
 
     styled_df = (
         df.style
