@@ -309,6 +309,19 @@ def open_json(file_path):
     return data
 
 
+writer = None
+
+def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1'):
+    global writer
+    if writer is None:
+        new_writer = pd.ExcelWriter(workbook_path, engine='xlsxwriter')
+        writer = new_writer
+    elif writer._path == workbook_path:
+        new_writer = pd.ExcelWriter(workbook_path, engine='xlsxwriter')
+        writer = new_writer
+    df.to_excel(writer, worksheet_name, index=False)    
+
+        
 def get_users_data():
     export_file_path = './docs/result.json'
     data = open_json(export_file_path)
@@ -412,9 +425,9 @@ def users_to_excel():
         "Регион": [user.region if user.region else "Ҏегион не найден" for user in users_list],
         "В группе": [user.membership for user in users_list],
         "Тип": [user.get_type() for user in users_list],
-        "Актив 14 дн.": [user.get_last_dates_count(14) if user.get_last_dates_count(14) is not 0 else '' for user in users_list],
-        "Актив 30 дн.": [user.get_last_dates_count(30) if user.get_last_dates_count(30) is not 0 else '' for user in users_list],
-        "Актив 90 дн.": [user.get_last_dates_count(90) if user.get_last_dates_count(90) is not 0 else '' for user in users_list]
+        "Актив 14 дн.": [user.get_last_dates_count(14) if user.get_last_dates_count(14) != 0 else '' for user in users_list],
+        "Актив 30 дн.": [user.get_last_dates_count(30) if user.get_last_dates_count(30) != 0 else '' for user in users_list],
+        "Актив 90 дн.": [user.get_last_dates_count(90) if user.get_last_dates_count(90) != 0 else '' for user in users_list]
     }
 
     df_users = pd.DataFrame(data_users)
@@ -448,9 +461,9 @@ def users_to_excel():
         "Регион": [region.name if region.name != "Регион не найден" else "Ҏегион не найден" for region in regions_list],
         "В группе": ['Да' if region.users else 'Нет' for region in regions_list],
         "Тип": [region.region_type for region in regions_list],
-        "Актив 14 дн.": [region.get_last_dates_count(14) if region.get_last_dates_count(14) is not 0 else '' for region in regions_list],
-        "Актив 30 дн.": [region.get_last_dates_count(30) if region.get_last_dates_count(30) is not 0 else '' for region in regions_list],
-        "Актив 90 дн.": [region.get_last_dates_count(90) if region.get_last_dates_count(90) is not 0 else '' for region in regions_list]
+        "Актив 14 дн.": [region.get_last_dates_count(14) if region.get_last_dates_count(14) != 0 else '' for region in regions_list],
+        "Актив 30 дн.": [region.get_last_dates_count(30) if region.get_last_dates_count(30) != 0 else '' for region in regions_list],
+        "Актив 90 дн.": [region.get_last_dates_count(90) if region.get_last_dates_count(90) != 0 else '' for region in regions_list]
     }
     
     df_regions = pd.DataFrame(data_regions)
@@ -487,35 +500,29 @@ def users_to_excel():
         .apply(highlight_by_value, axis=1)
     )
 
-    workbook_name = 'Соотнесение пользователей с регионом.xlsx'
-    workbook_path = './docs/' + workbook_name
+    workbook_path= './docs/Соотнесение пользователей с регионом.xlsx'
     worksheet_name = 'Пользователи и регионы'
 
-    with pd.ExcelWriter(workbook_path, engine='xlsxwriter') as writer:
+    write_to_excel(styled_df, workbook_path, worksheet_name)
+    worksheet = writer.book.get_worksheet_by_name(worksheet_name)
 
-        styled_df.to_excel(writer, worksheet_name, index=False) 
-
-        worksheet = writer.book.get_worksheet_by_name(worksheet_name)
-
-        if start_year <= end_year:
-            # Where sparklines start.
-            start_column_additional_data = df.shape[1] - years * 12 - years
-            
-            # Add sparklines for each year.
-            for period in range(years):
-                for row in range(df.shape[0]):
-                    target_cell = get_cell_address(row + 1, period + start_column_additional_data - 1) # Where are sparklines located.
-                    rng = get_range_address(row + 1, start_column_additional_data + years + period * 12, row + 1, start_column_additional_data + years + (period + 1) * 12 - 1) # Range of cells with messages count.
-                    worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
-        else:
-            start_column_additional_data = df.shape[1]
-            years = 1
+    if start_year <= end_year:
+        # Where sparklines start.
+        start_column_additional_data = df.shape[1] - years * 12 - years
         
-        # Using conditional formation for proper borders.
-        border_format = writer.book.add_format({'border': 1, 'border_color': 'black'})
-        worksheet.conditional_format(get_range_address(0, 0, df.shape[0], start_column_additional_data + years - 2), {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
-        
-        worksheet.autofit()
+        # Add sparklines for each year.
+        for period in range(years):
+            for row in range(df.shape[0]):
+                target_cell = get_cell_address(row + 1, period + start_column_additional_data - 1) # Where are sparklines located.
+                rng = get_range_address(row + 1, start_column_additional_data + years + period * 12, row + 1, start_column_additional_data + years + (period + 1) * 12 - 1) # Range of cells with messages count.
+                worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
+    else:
+        start_column_additional_data = df.shape[1]
+        years = 1
+    
+    # Using conditional formation for proper borders.
+    add_borders(writer.book, worksheet, 0, 0, df.shape[0], start_column_additional_data + years - 2)
+    worksheet.autofit()
 
 
 def get_cell_address(row, col):
@@ -523,6 +530,11 @@ def get_cell_address(row, col):
 
 def get_range_address(fitst_row, fitst_col, second_row, second_col):
     return Utility.xl_range(fitst_row, fitst_col, second_row, second_col)
+
+def add_borders(book, worksheet, first_row, first_col, second_row, second_col):
+    border_format = book.add_format({'border': 1, 'border_color': 'black'})
+    rng = get_range_address(first_row, first_col, second_row, second_col)
+    worksheet.conditional_format(rng, {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
 
 
 # Keywords with their variations.
@@ -589,10 +601,9 @@ def create_pivot_table():
     # Initialize pivot table.
     for i, region in enumerate(regions_list):
         
-        show_progress(iteration=i, total=len(regions), suffix=region.name)
+        show_progress(iteration=i, total=len(regions_list), suffix=region.name)
 
         pivot_table_data[region.name] = {", ".join(keyword_set): 0 for keyword_set in keywords}
-
         all_region_messages = ""
         clear_messages = ""
 
@@ -601,7 +612,8 @@ def create_pivot_table():
             if user.region == region.name:
                 all_region_messages += " " + user.messages
 
-        word_count_dict =  word_count(all_region_messages)
+        # Get dictionary with words without symbols and numbers in format {"word1": count1, "word2": count2``}, .
+        word_count_dict = word_count(all_region_messages)
 
         for word in word_count_dict.keys():
             clear_messages += " " + word
@@ -615,46 +627,23 @@ def create_pivot_table():
             
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
-    with pd.ExcelWriter('./docs/Проблемы.xlsx', engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-        pivot_table_df.to_excel(writer, sheet_name='Статистика по проблемам', index=True)
+    print(pivot_table_data)
 
-        worksheet = writer.sheets['Статистика по проблемам']
+    workbook_path= './docs/Соотнесение пользователей с регионом.xlsx'
+    worksheet_name = 'Статистика по проблемам'
+ 
+    write_to_excel(pivot_table_df, workbook_path, worksheet_name)
+    worksheet = writer.book.get_worksheet_by_name(worksheet_name)
 
-        add_borders(worksheet)
-        set_autowidth(worksheet)
-
-
-def add_borders(worksheet):
-    for row in worksheet.rows:
-        for cell in row:
-            cell.border = Border(left=Side(style='thin'),
-                right=Side(style='thin'),
-                top=Side(style='thin'),
-                bottom=Side(style='thin'))
+    add_borders(writer.book, worksheet, 0, 0, pivot_table_df.shape[0], pivot_table_df.shape[1])
+    worksheet.autofit()
 
 
 def get_column_letter(col):
     return Utility.xl_col_to_name(col)
 
 
-def set_autowidth(worksheet):
-    for index, col, in enumerate(worksheet.columns):
-        max_length = 0
-        min_width = 8
-        column = [cell for cell in col]
-        for cell in column:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(cell.value)
-            except:
-                pass
-        adjusted_width = (max_length + 3)
-        if adjusted_width < min_width:
-            adjusted_width = min_width
-        worksheet.column_dimensions[get_column_letter(index)].width = adjusted_width
-
-
-def show_progress(iteration, total, prefix='Прогресс:', suffix='', length=25, fill='█'):
+def show_progress(iteration, total, prefix='Прогресс:', suffix='', length=50, fill='█'):
     if total <= 50:
         length = total
     if iteration == (total - 1):
@@ -662,10 +651,16 @@ def show_progress(iteration, total, prefix='Прогресс:', suffix='', lengt
         bar = fill * length
     else:
         percent = ("{0:.1f}").format(100 * (iteration / float(total)))
-        filled_length = int(length * iteration // total)
-        bar = fill * filled_length + '-' * (length - filled_length)
+    filled_length = int(length * iteration // (total - 1))
+    bar = fill * filled_length + '-' * (length - filled_length)
     sys.stdout.write('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix))
     sys.stdout.flush()
+
+
+def save_close_writer(writer):
+    if writer is not None:
+        writer._save()
+        writer = None
 
 
 # Call the function to execute the code.
@@ -674,3 +669,4 @@ get_users_data()
 users_to_excel()
 print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
 create_pivot_table()
+save_close_writer(writer)
