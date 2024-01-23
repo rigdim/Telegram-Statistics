@@ -298,6 +298,14 @@ def find_region_mention(text):
                     return index, "city"
     return None, None
 
+
+class Message:
+    def __init__(self, text, date):
+        self.text = text
+        self.date = date
+        self.lenght = len(text)
+
+
 # Get .json file data or get None.
 def open_json(file_path):
     try:
@@ -609,8 +617,8 @@ def create_pivot_table():
 
         # Get all messages for corresponding region.
         for user in users_list:
-            if user.region == region.name:
-                all_region_messages += " " + user.messages
+            if  region.name == user.region:
+                all_region_messages += user.messages
 
         # Get dictionary with words without symbols and numbers in format {"word1": count1, "word2": count2``}, .
         word_count_dict = word_count(all_region_messages)
