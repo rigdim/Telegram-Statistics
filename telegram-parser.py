@@ -311,7 +311,7 @@ def open_json(file_path):
 
 writer = None
 
-def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1'):
+def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1', indexColumn=False):
     global writer
     if writer is None:
         new_writer = pd.ExcelWriter(workbook_path, engine='xlsxwriter')
@@ -319,7 +319,7 @@ def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1'):
     elif writer._path == workbook_path:
         new_writer = pd.ExcelWriter(workbook_path, engine='xlsxwriter')
         writer = new_writer
-    df.to_excel(writer, worksheet_name, index=False)    
+    df.to_excel(writer, worksheet_name, index=indexColumn)    
 
         
 def get_users_data():
@@ -627,12 +627,10 @@ def create_pivot_table():
             
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
-    print(pivot_table_data)
-
     workbook_path= './docs/Соотнесение пользователей с регионом.xlsx'
     worksheet_name = 'Статистика по проблемам'
  
-    write_to_excel(pivot_table_df, workbook_path, worksheet_name)
+    write_to_excel(pivot_table_df, workbook_path, worksheet_name, indexColumn=True)  
     worksheet = writer.book.get_worksheet_by_name(worksheet_name)
 
     add_borders(writer.book, worksheet, 0, 0, pivot_table_df.shape[0], pivot_table_df.shape[1])
@@ -646,7 +644,7 @@ def get_column_letter(col):
 def show_progress(iteration, total, prefix='Прогресс:', suffix='', length=50, fill='█'):
     if total <= 50:
         length = total
-    if iteration == (total - 1):
+    if iteration >= (total - 1):
         percent = 100.0
         bar = fill * length
     else:
