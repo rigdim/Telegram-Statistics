@@ -298,6 +298,25 @@ def find_region_mention(text):
                     return index, "city"
     return None, None
 
+
+messages = {}
+
+class Message():
+    def __init__(self, id, text, date, user_id):
+        self.id = id
+        self.text = text
+        self.lenght = len(text)
+        self.words = self.get_words()
+        self.words_count = len(self.words)
+        self.date = date
+        self.user_id = user_id
+    
+    def get_words(self):
+        if self.text is not None:
+            words = [word.lower() for word in self.text if word.isalpha()]
+            return words
+        
+
 # Get .json file data or get None.
 def open_json(file_path):
     try:
@@ -321,9 +340,13 @@ def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1', indexColumn=Fal
         writer = new_writer
     df.to_excel(writer, worksheet_name, index=indexColumn)    
 
-        
-def get_users_data():
+
+# Parse data from .json.     
+def parse_data():
     export_file_path = './docs/result.json'
+    users_file_path = './docs/users.json'
+    members_file_path = '.docs/members.json'
+    messages_file_path = '.docs/messages.json'
     data = open_json(export_file_path)
 
     # Get data from messages export.
@@ -347,6 +370,10 @@ def get_users_data():
 
             text = text.replace("\n", " ")
 
+            # Parse messages data to object of class Message().
+            message = Message(message_id, text, date, user_id)
+            messages[message_id] = message
+
             # Create user with region that was founded or update already existed.
             region_id, region_type = find_region_mention(text)
             add_user(users_list, user_name, user_id, text, date, region_id, region_type)
@@ -362,7 +389,7 @@ def get_users_data():
                 user.membership = 'Да'
             else:
                 add_user(users_list, member["name"], member["id"], message = None, date = None, membership="Да")
-
+        
         for user in users_list:
             if user.membership is None:
                 user.membership = "Нет"
@@ -373,6 +400,14 @@ def get_users_data():
 
     get_regions_data()
 
+    save_to_json(users_list, users_file_path)
+    save_to_json(messages, messages_file_path)
+
+
+def save_to_json(data, json_file_path):
+    with open(json_file_path, 'w') as json_file:
+        json.dumps(data, default=data)
+    
 
 def get_regions_data():
 
@@ -386,6 +421,7 @@ def get_regions_data():
                 region.add_user(user)
 
         region.display_info()
+
 
 # Define rules to highlight cells.
 highlight_values = [
@@ -663,7 +699,7 @@ def save_close_writer(writer):
 
 # Call the function to execute the code.
 print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
-get_users_data()
+parse_data()
 users_to_excel()
 print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
 create_pivot_table()
