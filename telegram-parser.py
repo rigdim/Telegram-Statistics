@@ -10,7 +10,11 @@ from datetime import datetime, timedelta
 from openpyxl.styles import Border, Side
 import xlsxwriter.utility as Utility
 
-class User:
+class DictElement:
+    def to_dict(self):
+        return vars(self)
+
+class User(DictElement):
     def __init__(self, id, name, message, date):
         self.id = id
         if name is None:
@@ -70,7 +74,6 @@ class User:
         print(f"Dates: {self.messages_dates}")
         print(f"Membership: {self.membership}")
         print("-" * 10)
-
 
     def get_first_region(self, ):
         if self.regions_count is not None:
@@ -299,9 +302,9 @@ def find_region_mention(text):
     return None, None
 
 
-messages = {}
+messages = []
 
-class Message():
+class Message(DictElement):
     def __init__(self, id, text, date, user_id):
         self.id = id
         self.text = text
@@ -313,10 +316,10 @@ class Message():
     
     def get_words(self):
         if self.text is not None:
-            words = [word.lower() for word in self.text if word.isalpha()]
+            words = re.findall(r'\b\w+\b', self.text)
+            words = [word.lower() for word in words]
             return words
         
-
 # Get .json file data or get None.
 def open_json(file_path):
     try:
@@ -345,8 +348,8 @@ def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1', indexColumn=Fal
 def parse_data():
     export_file_path = './docs/result.json'
     users_file_path = './docs/users.json'
-    members_file_path = '.docs/members.json'
-    messages_file_path = '.docs/messages.json'
+    members_file_path = './docs/members.json'
+    messages_file_path = './docs/messages.json'
     data = open_json(export_file_path)
 
     # Get data from messages export.
@@ -358,7 +361,8 @@ def parse_data():
             message_id = message["id"]
             user_id = message["from_id"]
             user_name = message["from"]
-            date = datetime.strptime(message["date"].replace("T", " "), "%Y-%m-%d %H:%M:%S").date()
+            date_time  = datetime.strptime(message["date"].replace("T", " "), "%Y-%m-%d %H:%M:%S")
+            date = date_time.date()
             text = message["text"]
 
             if type(text) == list:
@@ -371,8 +375,8 @@ def parse_data():
             text = text.replace("\n", " ")
 
             # Parse messages data to object of class Message().
-            message = Message(message_id, text, date, user_id)
-            messages[message_id] = message
+            message = Message(message_id, text, date_time, user_id)
+            messages.append(message)
 
             # Create user with region that was founded or update already existed.
             region_id, region_type = find_region_mention(text)
@@ -396,7 +400,7 @@ def parse_data():
 
     for user in users_list:
         user.set_region()
-        user.display_info()
+        # user.display_info()
 
     get_regions_data()
 
@@ -404,9 +408,10 @@ def parse_data():
     save_to_json(messages, messages_file_path)
 
 
-def save_to_json(data, json_file_path):
-    with open(json_file_path, 'w') as json_file:
-        json.dumps(data, default=data)
+def save_to_json(dict, json_file_path):
+    data = [element.to_dict() for element in dict]
+    with open(json_file_path, 'w', encoding='utf-8') as json_file:
+        json.dump(data, json_file, indent=2, ensure_ascii=False, default=str)
     
 
 def get_regions_data():
@@ -420,7 +425,7 @@ def get_regions_data():
             if user.region is None and region.name == "Регион не найден":
                 region.add_user(user)
 
-        region.display_info()
+        # region.display_info()
 
 
 # Define rules to highlight cells.
