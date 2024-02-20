@@ -7,98 +7,74 @@ import numpy as np
 from enum import Enum
 from pymystem3 import Mystem
 from datetime import datetime, timedelta
-from openpyxl.styles import Border, Side
 import xlsxwriter.utility as Utility
 
-# Using to convert object to dictionary.
 class DictElement:
+    """ Родительский класс для объектов User, Message, Region. """
     def to_dict(self):
+        """ Преобразование полей объекта и их значений в словарь. Используется для сохранения в JSON. """
         return vars(self)
 
 class User(DictElement):
-    def __init__(self, id, name):
+    def __init__(self, id, name, message, date):
+        """
+        Конструктор класса пользователя.
+
+        Параметры:
+        - id (int): Идентификатор пользователя.
+        - name (str): Имя пользователя.
+        - message (str): Сообщение пользователя.
+        - date (datetime): Дата сообщения пользователя.
+        """
         self.id = id
         if name is None:
             self.name = 'Удаленный пользователь'
         else:
             self.name = name
-        self.messages = []
-        self.messages_count = 0
-        self.region_mentions = {}  # Nested dictionary to store the region ID and the number of mentions of both as a city and as a district.
+        self.messages = message
+        if message:
+            self.messages_count = 1
+            self.messages_dates = [(date, 1)]
+        else:
+            self.messages_count = 0
+            self.messages_dates = []
+        # Вложенный словарь для хранения id региона и количества его упоминаний как города / как района.
+        self.regions_count = {}  
         self.region = None
         self.membership = None
         self.user_type = None
 
     def add_message(self, message):
-        self.messages.append(message)
-        self.messages_count += 1
+        """ Добавляет сообщение к существующему списку сообщений пользователя. """
+        self.messages += '\n' + message
+
+    def add_dates(self, date):
+        """ Добавляет количество сообщений для переданной даты."""
+        result = next((messages_date for messages_date in self.messages_dates if messages_date[0] == date), None)
+        if result is None:
+            self.messages_dates.append((date, 1))
+        else:
+            date_index = self.messages_dates.index(result)
+            self.messages_dates[date_index] = (result[0], result[1] + 1)
 
     def add_region(self, region_id, region_type):
-        # Add or update the count for the specified region and type.
-        region_dict = self.region_mentions.get(region_id, {"city": 0, "district": 0})
+        """ Добавляет количество упоминаний для указанного региона и типа. """
+        region_dict = self.regions_count.get(region_id, {"city": 0, "district": 0})
         if region_type is not None:
             region_dict[region_type] += 1
-        self.region_mentions[region_id] = region_dict
+        self.regions_count[region_id] = region_dict
 
-    def get_first_region(self):
-        if self.region_mentions is not None:
-            sorted_regions = sort_dict(self.region_mentions)
-            for key, value in sorted_regions.items():
-                if key is not None:
-                    return key, value
-        return None, None
-
-    # Get an appropriate region display name based on 'city' and 'district' number of mentions.
-    def set_region(self):
-        if self.region_mentions is not None:
-            first_region, type_mentions = self.get_first_region()
-            if first_region is not None:
-                city_count = type_mentions.get("city", 0)
-                district_count = type_mentions.get("district", 0)
-                if (city_count > district_count) and ('name_city' in regions[first_region]):
-                    self.region = regions[first_region]['name_city']
-                elif ('name_district' in regions[first_region]):
-                    self.region = regions[first_region]['name_district']
-                else:
-                    self.region = None
-
-    def get_last_messages_count(self, last_days):
-        if self.messages_dates is not None:
-            messages_count = 0
-            for date, count in reversed(self.messages_dates):
-                if date < (datetime.now() - timedelta(days = last_days)).date():
-                    break
-                messages_count += count
-            return messages_count
-        
-    def get_date_distribution(self, start_year, end_year):
-        if self.messages_dates is not None:
-            
-            # Create array with years * 12 cells.
-            date_distribution = []
-            date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
-
-            # Counts messages by each month and year and put it in array.
-            for date, count in self.messages_dates:
-                if date.year >= start_year:
-                    date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
-            return date_distribution
-        
-    def get_type(self):
-        for group in group_list:
-            if self.name in group.members:
-                self.user_type = group.name
-            if self.user_type is None:
-                self.user_type = UserType.OPERATOR.value
-        return self.user_type
+    def add_messages_count(self):
+        """ Увеличивает счетчик сообщений. """
+        self.messages_count += 1
 
     def display_info(self):
+        """ Отображает информацию о пользователе в консоли. """
         print(f"Name: {self.name}")
         print(f"ID: {self.id}")
         print(f"Message Count: {self.messages_count}")
 
-        # Sort dictionary descending.
-        sorted_regions = sort_dict(self.region_mentions)
+        sorted_regions = sort_dict(self.regions_count)
         for key, value in sorted_regions.items():
             if key is not None:
                 print(f"* {regions[key]['match'][0]} - city: {value.get('city')}, district: {value.get('district')}")
@@ -108,22 +84,79 @@ class User(DictElement):
         else:
             print(f"Region: {self.region}")
 
-        print(f"Dates: {self.messages[0].date}, {self.messages[1].date}, ... {self.messages[-2].date}, {self.messages[-1].date}")
+        print(f"Dates: {self.messages_dates}")
         print(f"Membership: {self.membership}")
         print("-" * 10)
 
+    def get_first_region(self):
+        """ Возвращает первый регион в region_counts пользователя. """
+        if self.regions_count is not None:
+            sorted_regions = sort_dict(self.regions_count)
+            for key, value in sorted_regions.items():
+                if key is not None:
+                    return key, value
+        return None, None
+    
+    def set_region(self):
+        """ Устанавливает регион пользователя на основе количества упоминаний города и района. """
+        if self.regions_count is not None:
+            first_region, mentions = self.get_first_region()
+            if first_region is not None:
+                city_count = mentions.get("city", 0)
+                district_count = mentions.get("district", 0)
+                if (city_count > district_count) and ('name_city' in regions[first_region]):
+                    self.region = regions[first_region]['name_city']
+                elif ('name_district' in regions[first_region]):
+                    self.region = regions[first_region]['name_district']
+                else:
+                    self.region = None 
+
+    def get_last_dates_count(self, last_days):
+        """ Возвращает количество сообщений за последнее указанное количество дней. """
+        if self.messages_dates is not None:
+            messages_count = 0
+            for date, count in reversed(self.messages_dates):
+                if date < (datetime.now() - timedelta(days = last_days)).date():
+                    break
+                messages_count += count
+            return messages_count
+        
+    def get_date_distribution(self, start_year, end_year):
+        """ Возвращает распределение количества сообщений (list) по датам за указанные года. """
+        if self.messages_dates is not None:
             
-def add_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = None):
-    # Check if the user with the given user_id already exists.
+            # Создание массива с 12 * 'количество лет' элементами.
+            date_distribution = []
+            date_distribution.extend([0] * ((end_year - start_year + 1) * 12))
+
+            # Подсчет сообщений по месяцам
+            for date, count in self.messages_dates:
+                if date.year >= start_year:
+                    date_distribution[(date.year - start_year) * 12 + date.month - 1] += count
+            return date_distribution
+        
+    def get_type(self):
+        """ Возвращает тип пользователя. """
+        for group in group_list:
+            if self.name in group.members:
+                self.user_type = group.name
+            if self.user_type is None:
+                self.user_type = UserType.OPERATOR.value
+        return self.user_type
+
+            
+def add_or_update_user(users_list, name, id, message = None, date = None, region_id = None, region_type = None, membership = None):
+    """ Добавляет пользователя в список пользователей или обновляет данные существующего. """
     existing_user = next((user for user in users_list if user.id == id), None)
     if existing_user:
-        # User already exists, update the existing user.
+        # Если пользователь уже существует.
         existing_user.add_message(message)
         existing_user.add_region(region_id, region_type)
         existing_user.add_messages_count()
+        existing_user.add_dates(date)
         existing_user.membership = membership
     else:
-        # User does not exist, create a new user and add to the list.
+        # Создание нового пользователя и добавление его в список пользователей.
         new_user = User(id, name, message, date)
         if region_id is not None and region_type is not None:
             new_user.add_region(region_id, region_type)
@@ -131,19 +164,21 @@ def add_user(users_list, name, id, message = None, date = None, region_id = None
         users_list.append(new_user)
 
 def get_user(id):
+    """ Возвращает пользователя по его идентификатору. """
     for user in users_list:
         if id in user.id:
             return user
                 
-users_list = []
+users_list = [] # Список пользователей
 
 
-# Sort regions by sum of its mentions as a city and as a district.
 def sort_dict(dictionary):
-     if dictionary is not None:
+    """ Сортирует словарь по сумме его упоминаний в виде района и города. """
+    if dictionary is not None:
         return dict(sorted(dictionary.items(), key=lambda item: sum(item[1].values()), reverse=True))
 
 
+# Перечисление возможных типов пользователей для создания групп.
 class UserType(Enum):
     ADMIN = 'Админ'
     OPERATOR = 'Оператор'
@@ -152,8 +187,8 @@ class UserType(Enum):
 
 group_list = []
 
-# Class to group users by their properties.
 class Group():
+    """ Группы пользователей по типу. """
     def __init__(self, name):
         self.name = name
         self.members = []
@@ -164,6 +199,7 @@ class Group():
         self.members.append(member)
         self.members_count += 1
 
+# Добавление пользователей в группы.
 admins_group = Group(UserType.ADMIN.value)
 admins_group.members = ['Михаил Хабаров', 'Иван Борисов', 'ООО "СИБ" Иркутск Евгений', '112 Иркутская область']
 
@@ -171,8 +207,8 @@ bots_group = Group(UserType.BOT.value)
 bots_group.members = ['ms.rt.ru', 'Combot', 'ChatKeeperBot']
 
 
-# Define class for region as a group header for several users.
-class Region():
+class Region(DictElement):
+    """ Класс региона, используемый для добавления заголовков для пользователей региона. """
     def __init__(self, name, region_type):
         self.id = len(regions_list) + 1
         self.name = name
@@ -187,12 +223,14 @@ class Region():
         self.users_count += 1
 
     def get_messages_count(self):
+        """ Получение суммы сообщений пользователей региона. """
         messages_count = 0
         for user in self.users:
             messages_count += user.messages_count
         return messages_count
     
     def get_last_dates_count(self, days):
+        """ Получение суммы сообщений пользователей региона за последние дни. """
         messages_count = 0
         for user in self.users:
             messages_count += user.get_last_dates_count(days)
@@ -207,10 +245,10 @@ class Region():
         print("-" * 10)
 
         
-# All displayable regions.
-regions_list = []
+regions_list = [] # Список регионов.
 
 def fill_regions_list():
+    """ Заполняет список регионов городами и районами из regions. """
     for region in regions:
         name = region.get("name_city", 0)
         if name:
@@ -222,6 +260,7 @@ def fill_regions_list():
             region_type = "Район (ГО)"
             Region(name, region_type)
 
+# Словарь для поиска региона по корню (match) и вывода соответствующего названия города (name_city) или района (name_district).
 regions = [
     { 'match': [ 'Иркутск' ], 'name_city': 'Иркутск', 'name_district': 'Иркутский район' },
     { 'match': [ 'Ангарск' ], 'name_district': 'Ангарский ГО' },
@@ -261,17 +300,17 @@ regions = [
     { 'match': [], 'name_district': 'Регион не найден' }
 ]
 
-# Word endings to be recognized as district.
-region_endings = [ 'ий', 'ого', 'ому', 'им', 'ом' ] 
 
+region_endings = [ 'ий', 'ого', 'ому', 'им', 'ом' ]     
 
-# Check if the last letters are equal to the provided ending.
 def check_ending(str, ending):
+    """ Ищет окончания в переданном слове для определения региона как района. """
     last_letters = str[-len(ending):]
     return last_letters == ending
 
 
 def find_region_mention(text):
+    """ Находит упоминание региона в тексте по массиву поисковых слов match. """
 
     words = re.split(r'\. |, |\.| ', text)
 
@@ -299,13 +338,14 @@ class Message(DictElement):
         self.user_id = user_id
     
     def get_words(self):
+        """ Возвращает список слов в тексте сообщения. """
         if self.text is not None:
             words = re.findall(r'\b\w+\b', self.text)
             words = [word.lower() for word in words]
             return words
         
-# Get .json file data or get None.
 def open_json(file_path):
+    """ Открывает файл формата JSON. """
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             data = json.load(file)
@@ -315,9 +355,10 @@ def open_json(file_path):
     return data
 
 
-writer = None
+writer = None   # Содержит объект writer для записи данных в Excel.
 
 def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1', indexColumn=False):
+    """ Записывает DataFrame в файл Excel. """
     global writer
     if writer is None:
         new_writer = pd.ExcelWriter(workbook_path, engine='xlsxwriter')
@@ -328,15 +369,23 @@ def write_to_excel(df, workbook_path, worksheet_name = 'Sheet1', indexColumn=Fal
     df.to_excel(writer, worksheet_name, index=indexColumn)    
 
 
-# Parse data from .json.     
 def parse_data():
+    """ 
+    Парсит исходные данные из файлов формата JSON. 
+
+    - Заполняет список пользователей, сообщений;
+    - Выполняет поиск и назначение региона пользователям;
+    - Определяет состоит ли пользователей в группе.
+    """
+
     export_file_path = './docs/result.json'
     users_file_path = './docs/users.json'
     members_file_path = './docs/members.json'
     messages_file_path = './docs/messages.json'
+
     data = open_json(export_file_path)
 
-    # Get data from messages export.
+    # Получение данных из файла выгрузки сообщений.
     if data is not None:
         for message in data["messages"]:
             if message["type"] != "message":
@@ -358,25 +407,27 @@ def parse_data():
 
             text = text.replace("\n", " ")
 
-            # Parse messages data to object of class Message().
+            # Создание объекта класса Message().
             message = Message(message_id, text, date_time, user_id)
             messages.append(message)
 
-            # Create user with region that was founded or update already existed.
+            # Нахождение региона в сообщении пользователя и получение его id и типа.
             region_id, region_type = find_region_mention(text)
-            add_user(users_list, user_name, user_id, text, date, region_id, region_type)
+
+            # Добавление/обновление данных пользователя полученными при парсинге данными.
+            add_or_update_user(users_list, user_name, user_id, text, date, region_id, region_type)
 
     members_file_path = './docs/members.json'
     members = open_json(members_file_path)
 
-    # Check that users from messages are still members in chat.
+    # Проверка на наличие пользователя в чате. 
     if members is not None:
         for member in members:
             user = get_user(member["id"])
             if user:
                 user.membership = 'Да'
             else:
-                add_user(users_list, member["name"], member["id"], message = None, date = None, membership="Да")
+                add_or_update_user(users_list, member["name"], member["id"], message = None, date = None, membership="Да")
         
         for user in users_list:
             if user.membership is None:
@@ -386,19 +437,23 @@ def parse_data():
         user.set_region()
         # user.display_info()
 
-    get_regions_data()
+    add_users_to_regions()
 
+    # Сохранение списка пользователей и списка сообщений в JSON файлах.
+    # TODO: планировалось использовать, чтобы обрабатывать только новые сообщения.
     save_to_json(users_list, users_file_path)
     save_to_json(messages, messages_file_path)
 
 
 def save_to_json(dict, json_file_path):
+    """ Сохраняет значения полей элементов класса DictElement в файл формата JSON. """
     data = [element.to_dict() for element in dict]
     with open(json_file_path, 'w', encoding='utf-8') as json_file:
         json.dump(data, json_file, indent=2, ensure_ascii=False, default=str)
     
 
-def get_regions_data():
+def add_users_to_regions():
+    """ Добавление пользователей в список пользователей объекта Region. """
 
     fill_regions_list()
 
@@ -412,9 +467,9 @@ def get_regions_data():
         # region.display_info()
 
 
-# Define rules to highlight cells.
+# Правила (value) для выделения ячеек или строки (entire_row) цветом (background-color).
 highlight_values = [
-    {'value': 'Район (ГО)', 'color': 'background-color: #EEEEEE', 'entire_row': True},
+    {'value': 'Район (ГО)', 'color': 'background-color: #EEEEEE', 'entire_row': True},  # Серый фон для строки района/города
     {'value': 'Город', 'color': 'background-color: #EEEEEE', 'entire_row': True},
     {'value': 'Админ', 'color': 'color: #666666', 'entire_row': True},
     {'value': 'Бот', 'color': 'color: #666666', 'entire_row': True},
@@ -423,6 +478,7 @@ highlight_values = [
 ]
 
 def highlight_by_value(row):
+    """ Выделение ячеек по заданным правилам highlight_values. """
     for highlight in highlight_values:
         for col, val in row.items():
             if val == highlight['value']:
@@ -434,14 +490,20 @@ def highlight_by_value(row):
 
 
 def users_to_excel():    
-
-    # TODO: Change start and end dates with the oldest and the newest message date.
+    """
+    Экспорт информации о пользователях и их регионах в Excel.
+    
+    Создает из полученных при парсинге данных DataFrame'ы (pandas):
+    - df_users - пользователи и их активность.
+    - df_regions - регионы с агрегированной статистикой (объединяются с пользователями и выступают как заголоки).
+    """
     now = datetime.now()
     start_year = 2022
     end_year = now.year
     years = end_year - start_year + 1
     months_columns = [f'{calendar.month_abbr[month + 1]} {year % 100}' for year in range(start_year, end_year + 1) for month in range(12)]
 
+    # Определение столбцов DataFrame для пользователей.
     data_users = {
         "object": [user for user in users_list],
         "ID": [user.id for user in users_list],
@@ -457,27 +519,28 @@ def users_to_excel():
 
     df_users = pd.DataFrame(data_users)
 
-    # Insert messages distribution in DataFrame.
+    # Вставка столбцов с распределением сообщений по месяцам для создания гистограмм.
     if start_year > end_year:
         print('Начальная дата распределения сообщений более поздняя, чем конечная.')
     else:
         df_users['date_distribution'] = df_users.apply(lambda row: row['object'].get_date_distribution(start_year, end_year), axis=1)
 
-        # Create and rename index for DataFrame with date distribution.
+        # Создание и переименование заголовков для распределения в виде месяц + год.
         df_distribution = pd.DataFrame(df_users['date_distribution'].tolist(), index=df_users.index)
         df_distribution.columns = months_columns
 
-        # Concat date distribution with other data.
+        # Конкатенация распределения сообщений и информации о пользователях и регионах.
         df_users = pd.concat([df_users, df_distribution], axis=1)
 
-        # Where to place additional data on sheet.
+        # Начальный столбец для вставки распределения.
         start_column_additional_data = df_users.shape[1] - years * 12
 
-        # Insert columns for sparklines.
+        # Вставка колонок для гистограмм распределения сообщений.
         df_users.insert(start_column_additional_data, '', value=np.nan)
         for year in reversed(range(start_year, end_year + 1)):
             df_users.insert(start_column_additional_data, str(year) + ' г.', value=np.nan)
 
+    # Определение столбцов регионов. Одинаковые столбцы объединяются при конкатенации.
     data_regions = {
         "object": [region for region in regions_list],
         "ID": [None for _ in regions_list],
@@ -493,37 +556,35 @@ def users_to_excel():
     
     df_regions = pd.DataFrame(data_regions)
 
-    # Find sum of all messages.
+    # Нахождение суммы сообщений для региона.
     region_messages_sum = df_users.groupby("Регион")["Сообщений"].sum().reset_index()
     df_regions = pd.merge(df_regions, region_messages_sum, on="Регион", how="left", suffixes=('', '_sum'))
     df_regions['Сообщений'] = df_regions['Сообщений_sum'].fillna(df_regions['Сообщений']).astype(int)
     df_regions = df_regions.drop(['Сообщений_sum'], axis=1)
     
     if start_year <= end_year:
-        # Find sum of messages by months for regions.
+        # Нахождение суммы распределения сообщений по месяцам для региона.
         df_regions_sum = df_users.groupby('Регион')[months_columns].sum().reset_index()
         df_regions = pd.merge(df_regions, df_regions_sum, how='left', on='Регион')
         df_users = df_users.drop('date_distribution', axis=1)
 
-    # Sort regions to set indexes.
+    # Сортировка региона для и назначение индексов.
     df_regions = df_regions.sort_values(by=["Регион", "Сообщений"], ascending=[True, False])
     df_regions['ID'] = df_regions.reset_index().index + 1
 
+    # Соединение строк пользователей со строками регионов.
     df = pd.concat([df_users, df_regions], ignore_index=True)
 
-    # Create categories with type value and sort in given order.
+    # Создание категорий с заранее заданной сортировкой.
     sorting_order_type = ["Район (ГО)", "Город", "Оператор", "Админ", "Бот"]
     df['Тип'] = pd.Categorical(df['Тип'], categories=sorting_order_type, ordered=True)
     df = df.sort_values(by=["Регион", "Тип", "Сообщений", "ID"], ascending=[True, True, False, True])
 
     df = df.drop(['object', "Регион"], axis=1)
 
-    styled_df = (
-        df.style
-        .bar(subset=["Сообщений"], color='lightblue', vmin=0)  # Color cells in the "Количество сообщений" column.
-        .highlight_max(subset=["Сообщений"], color='yellow')  # Highlight maximum value in the "Количество сообщений" column.
-        .apply(highlight_by_value, axis=1)
-    )
+    # Назначение стилей к DataFrame.
+    # Не используйте styled_df для работы с данными и назначайте стили перед экспортом.
+    styled_df = df.style.apply(highlight_by_value, axis=1)
 
     workbook_path= './docs/Соотнесение пользователей с регионом.xlsx'
     worksheet_name = 'Пользователи и регионы'
@@ -531,38 +592,42 @@ def users_to_excel():
     write_to_excel(styled_df, workbook_path, worksheet_name)
     worksheet = writer.book.get_worksheet_by_name(worksheet_name)
 
+    # Добавление гистограмм необходимо выполнять после создания книги.
     if start_year <= end_year:
-        # Where sparklines start.
-        start_column_additional_data = df.shape[1] - years * 12 - years
+
+        # Начальная колонка для гистограмм.
+        start_column_sparklines = df.shape[1] - years * 12 - years
         
-        # Add sparklines for each year.
         for period in range(years):
             for row in range(df.shape[0]):
-                target_cell = get_cell_address(row + 1, period + start_column_additional_data - 1) # Where are sparklines located.
-                rng = get_range_address(row + 1, start_column_additional_data + years + period * 12, row + 1, start_column_additional_data + years + (period + 1) * 12 - 1) # Range of cells with messages count.
-                worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Adds sparkline. Defines type, width and max value.
+                target_cell = get_cell_address(row + 1, period + start_column_sparklines - 1) # Ячейка для размещения гистограммы.
+                rng = get_range_address(row + 1, start_column_sparklines + years + period * 12, row + 1, start_column_sparklines + years + (period + 1) * 12 - 1) # Диапазон данных.
+                worksheet.add_sparkline(target_cell, {'range': rng, 'type': 'column', 'max': 10}) # Добавить гистограмму с указанным типом, шириной и макс. значением.
     else:
-        start_column_additional_data = df.shape[1]
+        start_column_sparklines = df.shape[1]
         years = 1
     
-    # Using conditional formation for proper borders.
-    add_borders(writer.book, worksheet, 0, 0, df.shape[0], start_column_additional_data + years - 2)
+    add_borders(writer.book, worksheet, 0, 0, df.shape[0], start_column_sparklines + years - 2)
     worksheet.autofit()
 
 
 def get_cell_address(row, col):
+    """ Получение адреса ячейки в формате 'A1'. """
     return Utility.xl_rowcol_to_cell(row, col)
 
 def get_range_address(fitst_row, fitst_col, second_row, second_col):
+    """ Получение адреса диапазона в формате 'A1'. """
     return Utility.xl_range(fitst_row, fitst_col, second_row, second_col)
 
 def add_borders(book, worksheet, first_row, first_col, second_row, second_col):
+    """ Добавление границ ячеек при помощи условного форматирования. """
     border_format = book.add_format({'border': 1, 'border_color': 'black'})
     rng = get_range_address(first_row, first_col, second_row, second_col)
     worksheet.conditional_format(rng, {'type':'cell', 'criteria': '<>', 'value': -1, 'format': border_format})
 
 
-# Keywords with their variations.
+
+# Ключевые слова для поиска инцидентов.
 keywords = [
     ["электроэнергия", "электричество", "свет", "ээ", "эл", "э", "отключение"],
     ["сеть", "связь", "соединение"],
@@ -571,15 +636,10 @@ keywords = [
     ["карточки"]
 ]
 
-
-# Dictionary to store the pivot table data.
-pivot_table_data = {}
-
 mystem = Mystem()
 
-
-# Normalize keywords using pymystem3.
 def normalize_words(words):
+    """ Нормализация слов с использованием библиотеки pymystem3 """
     lemmas = mystem.lemmatize(words.lower())
     lemmatized_words = [word for word in lemmas if word.isalpha()]
     if len(lemmatized_words) == 1:
@@ -587,8 +647,8 @@ def normalize_words(words):
     return lemmatized_words
 
 
-# Count words and delete duplicates.
 def word_count(text):
+    """ Считает слова в тексте и записывает их в формате {"word1": count1, "word2": count2, ...}. """
     words = re.split(r'\\|/|\n|\. |, |\.| ', text)
     cleared_words = [word for word in words if word.isalpha()]
     word_dict = {}
@@ -599,6 +659,7 @@ def word_count(text):
 
 
 def find_word_number(target_word, text):
+    """ Возвращает номер слова в тексте или None. """
     try:
         word_number = text.index(target_word)
         return word_number
@@ -607,6 +668,7 @@ def find_word_number(target_word, text):
 
 
 def find_keyword(keyword, text):
+    """ Нахождение ключевого слова в тексте. """
 
     if len(keyword) > 2:
         nomalized_keyword = normalize_words(keyword)
@@ -620,36 +682,42 @@ def find_keyword(keyword, text):
     else:
         return -1
 
-
+# TODO: заменить на распределение инцидентов по дням с указанием пользователя.
 def create_pivot_table():
+    """ Создание сводной таблицы регион/инцидент """
+    
+    pivot_table_data = {}
 
-    # Initialize pivot table.
     for i, region in enumerate(regions_list):
         
         show_progress(iteration=i, total=len(regions_list), suffix=region.name)
-
+        
+        # Соотнесение имени региона и ключего слова.
         pivot_table_data[region.name] = {", ".join(keyword_set): 0 for keyword_set in keywords}
         all_region_messages = ""
         clear_messages = ""
 
-        # Get all messages for corresponding region.
+        # Объединение всех сообщений пользователей из одного региона.
         for user in users_list:
             if user.region == region.name:
                 all_region_messages += " " + user.messages
 
-        # Get dictionary with words without symbols and numbers in format {"word1": count1, "word2": count2``}, .
+        # Преобразует все сообщения в словарь {"word1": count1, "word2": count2, ...}.
         word_count_dict = word_count(all_region_messages)
 
+        # Составляет очищенное сообщение word1 word2 ...
+        # Порядок сохраняется, что позволяет потом найти count1, count2, ...
         for word in word_count_dict.keys():
             clear_messages += " " + word
 
-        # Check if keyword in messages and fill out it to the table.
+        # Если ключевое слово есть в тексте, то добавляет его частоту.
         for keyword_set in keywords:
             for keyword in keyword_set:
                 position = find_keyword(keyword, clear_messages)
                 if position >= 0:
                     pivot_table_data[region.name][", ".join(keyword_set)] += list(word_count_dict.values())[position]
-            
+
+    # Создание DataFrame из словаря.       
     pivot_table_df = pd.DataFrame.from_dict(pivot_table_data, orient="index")
 
     workbook_path= './docs/Соотнесение пользователей с регионом.xlsx'
@@ -663,10 +731,12 @@ def create_pivot_table():
 
 
 def get_column_letter(col):
+    """ Получить букву столбца Excel на основе его номера. """
     return Utility.xl_col_to_name(col)
 
 
 def show_progress(iteration, total, prefix='Прогресс:', suffix='', length=50, fill='█'):
+    """ Показать прогресса выполнения. Использует текущую итерацию цикла. """
     if total <= 50:
         length = total
     if iteration >= (total - 1):
@@ -686,10 +756,11 @@ def save_close_writer(writer):
         writer = None
 
 
-# Call the function to execute the code.
-print("СООТНЕСЕНИЕ ПОЛЬЗОВАТЕЛЯ С РЕГИОНОМ")
+print("Соотнесение пользователя с регионом...")
 parse_data()
 users_to_excel()
-print("\nПОДСЧЕТ КОЛИЧЕСТВА ИНЦИДЕНТОВ")
+print("Завершено")
+print("\nПодсчет количества инцидентов:")
 create_pivot_table()
+print("\nЗавершено")
 save_close_writer(writer)
