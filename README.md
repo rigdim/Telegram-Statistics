@@ -1,71 +1,50 @@
 
-# Telegram statistic
+# Статистика Telegram
 
-Python scripts to get statistics based on ***Telegram chat history export***.
+Скрипт Python для получения различной статистики из ***экспорта истории чата Telegram***.
 
-It takes (`.json`) file and parse it into tabular format (`.xlsx`) with additional information.
+На входе получает `.json` файл выгрузки и преобразует его в `.xlsx` с дополнительной информацией.
 
-## Overview
+## Обзор
 
-By using this script you can get two `.xlsx` that have next data from your chat exported messages:
+Используя этот скрипт, вы можете получить файл Excel, содержащих следующие данные из экспортированных сообщений вашего чата:
 
-### First book
+### Первый лист "Соотнесение пользователей и регионов"
 
-- List of users who wrote something and other user that a users who are in the chat but haven’t written anything.
-- List of deleted accounts and users who left the chat, whose messages remained in history.
-- Activity for each user in the last 14, 30, 90 days with visualization.
-- Messages count.
-- Region that users mentioned in their messages.
+- Список пользователей, писавших что-то, и других пользователей, которые находятся в чате, но ничего не писали.
+- Список удаленных аккаунтов, а также пользователей, покинувших чат, чьи сообщения остались в истории.
+- Активность каждого пользователя за последние 14, 30, 90 дней с визуализацией в виде гистограмм.
+- Количество сообщений каждого пользователя.
+- Регион, упомянутый пользователями в своих сообщениях.
+- Агрегированные данные пользователей по регионам.
 
-### Second book
+### Второй лист "Статистика по инцидентам"
 
-- Mentions of various incidents in all regions over the entire period of time with visualization.
-- Comparement with actual system failures messages (from telegram bot).
+- Количество упоминаний различных инцидентов во всех регионах за весь период времени.
 
-## How to use it
+## Как использовать
 
-Move to script directory using `cd`.
+### 1. Экспортируйте сообщения
 
-Create venv & install requirements:
+Используя настольный или веб-интерфейс Telegram, перейдите в чат, информацию о котором хотите обработать, нажмите на кнопку настроек (три точки в верхнем правом углу), а затем нажмите ***Экспорт истории чата***.
 
-#### Windows
-
-```bash
-python -m venv venv
-
-venv\Sripts\activate
-
-pip install -r requirements.txt
-```
-
-#### Linux
-
-```bash
-python3 -m venv venv
-
-source venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-### Export messages
-
-Using Telegram's Desktop or Web interfaces, go to the chat you want to parse, click on the options button (three dots in the upper right corner) and them click on ***Export chat history***.
-
-In the dialog window, right next to ***Format***, choose `.json`.
+В диалоговом окне, рядом с опцией ***Формат***, выберите `JSON`.
 
 ![Chat export](https://dl.dropbox.com/scl/fi/3li1hd5sldafiy7rtjjce/export_telegram.png?rlkey=to66ro2ios4jsy3oz0g1d6qu9&dl=0)
 
-After the backup is completed, Telegram will generate a `results.json` file. Next you need to copy or move it to `./docs` folder in script directory.
+После завершения резервного копирования Telegram создаст файл `results.json`. Затем вам нужно скопировать или переместить его в папку `docs` в каталоге скрипта.
 
-### Export members (Optional)
+### 2. Экспорт участников (опционально)
 
-*Do it to find who wrote something and then leave chat.*
+*Сделайте это, чтобы найти тех, кто писал что-то ранее, а затем покинул чат.*
 
-1. Copy javascipt code from `copy_members.js` 
-2. Insert it in ***DevTools console***
-3. Copy output and put it `members.json` file in `docs` folder (create file if it doesn't exist).
-<details> <summary>Javascript code</summary>
+1. Откройте [веб-версию телеграмма](https://web.telegram.org/k/ "Telegram-Web").
+2. Откройте нужный канал и пролистайте список участников до конца.
+3. Скопируйте код JavaScript из `copy_members.js`.
+4. Вставьте код в консоль ***DevTools***.
+5. Скопируйте вывод и поместите его в файл `members.json` в папке `docs` (создайте файл, если он не существует).
+
+<details><summary>Javascript code</summary>
 
 ```javascript
 function getTextFromElement(element) {
@@ -98,9 +77,16 @@ console.log("[" + userList.join(",\n") + "]");
 
 </details>
 
-### Run script
+### 3. Запустите скрипт
 
+Запустите скрипт с помощью файла `start.bat`.
 
-Run the script using `.bat` file. 
+Файл формата `.xlsx` будет создан в папке `docs`.
 
-Two `.xlsx` files will be created in `./docs` folder.
+## Будет добалено
+
+### Второй лист "Статистика по инцидентам"
+
+- Вывод информации об инцидентах по дням.
+- Вывод сообщившего об инциденте пользователя
+- Сравнение с фактическими сообщениями о сбоях системы (от бота Telegram).
